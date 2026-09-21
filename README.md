@@ -83,4 +83,4 @@ Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s) con generatore di funzioni inte
 
 ---
 
-*Progetto documentato con l'assistenza di Claude (Anthropic) — inclusa la simulazione circuitale in LTspice e la selezione componenti.*
+*Progetto documentato con l'assistenza di Claude (Anthropic) e Gemini (Google) — inclusa la simulazione circuitale in LTspice e la selezione componenti.*

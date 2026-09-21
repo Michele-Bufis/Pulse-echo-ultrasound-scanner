@@ -13,7 +13,7 @@ Simulazione del circuito Step 1 (pulse-echo singolo elemento, trasduttore 5MHz) 
 | Rif. | Valore | Ruolo |
 |---|---|---|
 | V1 | DC 12V | Alimentazione ingresso boost |
-| V2 | `PULSE(0 5 0 9.9u 0.1u 0.1u 10u)` | Rampa/oscillatore per comparatore PWM (~100kHz) |
+| V2 | `PULSE(0 5 0 9.9u 0.1u 0 10u)` | Rampa/oscillatore per comparatore PWM (~100kHz) |
 | V3 | DC 2.5V | Riferimento soglia duty-cycle per comparatore (confrontato con la rampa V2) |
 | V4 | `PULSE(0 12 0 10n 10n 200n 1m)` | Generatore impulsi pulser (sostituisce MC33151PG), impulso 200ns, ripetizione 1ms (1kHz) |
 

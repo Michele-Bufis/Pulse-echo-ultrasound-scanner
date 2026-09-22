@@ -7,7 +7,7 @@ Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pul
 **Step 1 (pulse-echo singolo elemento, A-mode statico): in fase avanzata**
 - ✅ Architettura definita e documentata
 - ✅ Circuito completo progettato e **validato in simulazione LTspice**
-- ✅ Lista componenti quasi completa — carrello TME confermato ~70,75€, totale realistico Step 1 ~130-160€
+- ✅ Lista componenti quasi completa — carrello TME confermato ~84.70€, totale realistico Step 1 ~130-160€
 - 🔄 Assemblaggio fisico: non ancora iniziato
 
 **Step 2 (rotazione meccanica → B-mode): pianificato, non ancora affrontato in dettaglio**

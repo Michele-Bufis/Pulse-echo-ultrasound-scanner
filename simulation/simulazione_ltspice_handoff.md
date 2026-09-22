@@ -105,14 +105,24 @@ Dopo un primo tentativo con fili fisici lunghi che generava confusione, si è pa
 | **L2_D1** | L2(2), D1(anodo) |
 | **BOOST_OUT** | D1(catodo), C1(1), R2(1), C2(1, capo NON verso M2) |
 | **FB** | R2(2), R3(1) — solo monitoraggio, non chiuso sul comparatore in questa versione semplificata |
-| **TX_NODE** | C2(2), M2(drain), D2(catodo), D4(1), D5(1), C3(1), R5(1) — nodo condiviso pulser/trasduttore |
+| **TX_NODE** | C2(2), M2(drain), D2(catodo), C3(1), R5(1), R4(1) — nodo condiviso pulser/trasduttore. Da qui esce SOLO R4 verso il T/R switch |
 | **D23_MID** | D2(anodo), D3(catodo) — nodo intermedio serie tra D2 e D3, corretto dopo revisione utente (D2/D3 in serie, non in parallelo — solo D3(anodo) va a GND) |
 | **PULSE_M2** | V4(+), M2(gate) |
-| **RX_IN** | R4(2), U2(ingresso +), R9(2), R10(1) — R4 in serie tra nodo D4/D5 e RX_IN |
+| **RX_IN** | R4(2), D4(1), D5(1), U2(ingresso +), R9(2), R10(1) — R4 in serie tra TX_NODE e RX_IN; D4/D5 (clamp verso GND) collegati su RX_IN, A VALLE di R4, non su TX_NODE |
 | **RX_FB** | U2(ingresso −), R6(1), R7(1), C5(1) |
 | **RX_OUT** | U2(uscita), R7(2), C5(2) |
 
 **Procedura:** cancellare tutti i fili fisici esistenti, usare F4 su ogni pin per assegnare il nome nodo corretto dalla tabella sopra. Verificare un blocco alla volta (boost, poi pulser+T/R+trasduttore, poi RX) prima di procedere al successivo.
+
+## ⚠️ CORREZIONE — errore logico nella netlist T/R switch (versione precedente di questo file)
+Una versione precedente di questa tabella documentava erroneamente D4/D5 collegati direttamente su `TX_NODE`, con R4 a valle verso `RX_IN`. **Era un errore di documentazione, non del circuito reale** (lo schema LTspice fisico ha sempre avuto il wiring corretto). Sequenza CORRETTA, obbligatoria:
+
+1. `TX_NODE` → un capo di **R4**
+2. L'altro capo di R4 → nodo `RX_IN`
+3. Su `RX_IN`, i diodi incrociati **D4/D5** verso GND (clamp)
+4. Da `RX_IN` → ingresso positivo dell'amplificatore (U2)
+
+**Motivo fisico:** se D4/D5 fossero collegati direttamente su TX_NODE (senza R4 a monte), dovrebbero assorbire l'intera corrente di scarica del pulser (~140V su C2 4.7nF) senza alcun limite — distruzione istantanea dei diodi, nessun impulso trasmesso al trasduttore. Con R4 (100Ω) prima dei diodi, il picco HV viene limitato in corrente (I ≈ 130V/100Ω ≈ 1.3A) prima che i diodi clampino il residuo a ±0.6-0.7V — è anche il motivo per cui R4 deve essere un resistore 1-2W film metallico (tenuta al picco istantaneo), non un 1/4W standard. In ricezione, l'eco (mV) attraversa R4 con perdita trascurabile verso l'alta impedenza d'ingresso dell'op-amp, mentre i diodi restano spenti sotto la soglia di conduzione (~0.7V).
 
 ## COMPONENTI AGGIUNTI DURANTE IL DEBUG (non nella lista acquisti fisici originale)
 | Rif. | Valore | Ruolo | Da valutare per hardware reale? |

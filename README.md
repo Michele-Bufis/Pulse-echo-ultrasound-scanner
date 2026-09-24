@@ -7,14 +7,20 @@ Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pul
 **Step 1 (pulse-echo singolo elemento, A-mode statico): in fase avanzata**
 - ✅ Architettura definita e documentata
 - ✅ Circuito completo progettato e **validato in simulazione LTspice**
-- ✅ Lista componenti quasi completa — carrello TME confermato ~84.70€, totale realistico Step 1 ~130-160€
+- ✅ Lista componenti quasi completa — carrello TME confermato ~70,75€, totale realistico Step 1 ~130-160€
 - 🔄 Assemblaggio fisico: non ancora iniziato
 
-**Step 2 (rotazione meccanica → B-mode): pianificato, non ancora affrontato in dettaglio**
+**Step 2 (rotazione meccanica → B-mode): design deciso, assemblaggio fisico non ancora iniziato**
+- ✅ Configurazione vasca/sonda decisa: vasca cilindrica in Polipropilene, Ø18cm, sonda **esterna** (mai a contatto con l'acqua, gel accoppiante sulla parete) — motivo: trasduttore scelto non impermeabile. Dettagli e calcoli completi in `step2-rotazione-bmode.md`
+- ✅ Numero acquisizioni per giro deciso: 200 (una per step motore NEMA17 full-step), verificato sufficiente per il raggio scelto
+- 🔄 Componenti meccanici (motore, anello, driver): da ordinare
+- 🔄 Assemblaggio fisico: non ancora iniziato
 
 ## Obiettivo e aspettative realistiche
 
 Il sistema produce un'immagine **B-mode in scala di grigi**, con speckle (rumore a grana tipico degli ultrasuoni), contorni netti solo dove c'è forte differenza di impedenza acustica (pelle, osso), ombra acustica dietro l'osso. **Non è raggiungibile una qualità tipo RM o TAC** — tecnologie fisicamente diverse, irraggiungibili a livello hobbistico. Riferimento onesto: ecografia muscoloscheletrica clinica (polso/tendini).
+
+**Nota sulla configurazione reale:** a differenza del concetto iniziale (anello di trasduttori immerso), la sonda nello Step 2 resta **esterna** alla vasca (contact-type non impermeabile), a contatto con la parete esterna tramite gel — solo il target (dito/polso) è immerso. Vedi `step2-rotazione-bmode.md` per la cronologia della scelta.
 
 **Riferimento concettuale** (non di scala): il principio di un anello di trasduttori in vasca d'acqua richiama lo stesso approccio del progetto **Midjourney Medical** (scanner full-body a ultrasuoni, migliaia di elementi, 2 petaflop di calcolo) — stessa famiglia tecnica, scala hobbistica enormemente più piccola. Buona narrativa di portfolio, non un target di qualità da inseguire.
 
@@ -79,7 +85,7 @@ Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s) con generatore di funzioni inte
 2. Assemblaggio fisico del circuito Step 1
 3. Setup firmware RP2040 (Pico SDK + PIO)
 4. Test pratici secondo le fasi A-F documentate
-5. Progettazione Step 2 (rotazione meccanica, motore+encoder)
+5. Step 2: ordinare componenti meccanici (motore NEMA17+A4988, vasca PP Ø18cm, gel accoppiante) e assemblare — design già deciso, vedi `step2-rotazione-bmode.md`
 
 ---
 

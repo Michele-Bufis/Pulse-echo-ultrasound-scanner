@@ -5,6 +5,8 @@ Costruire in casa un sistema di imaging a ultrasuoni che produca un'**immagine 2
 
 **Chiarimento importante — completezza vs qualità:** con rotazione a 360° (non un ventaglio parziale) lo Step 2 produce concettualmente una **"fetta" 2D completa dell'oggetto**, strutturalmente paragonabile a una sezione TAC/RM (vista completa a giro d'orizzonte, non solo un lato parziale come un'ecografia clinica classica). Quello che resta diverso da TAC/RM è il **dettaglio interno**: contorni netti solo dove c'è forte differenza di impedenza acustica (pelle, osso), zone di tessuto omogeneo restano "grigie e granulose" (speckle), ombre acustiche dietro l'osso restano buchi nella fetta. La rotazione risolve la *forma* del risultato (sezione completa), non la *ricchezza di dettaglio* al suo interno.
 
+**Nota sulla configurazione fisica reale (Step 2):** a differenza dell'idea concettuale iniziale (anello di trasduttori immerso in vasca), la configurazione finale scelta ha il trasduttore **esterno** alla vasca, che scorre sulla parete esterna con gel accoppiante — il target (dito/polso) resta immerso, la sonda no. Motivo: il trasduttore scelto (5P20N, contact-type) non è impermeabile. Dettagli completi, alternative valutate e calcoli in `step2-rotazione-bmode.md`, Sezione 2.
+
 **Riferimento concettuale (non di scala):** l'idea originale di un anello di trasduttori rotante in vasca d'acqua è concettualmente la stessa famiglia tecnica del progetto **Midjourney Medical** (annunciato giugno 2026, scanner full-body a ultrasuoni con anello di migliaia di trasduttori in vasca d'acqua, sviluppato con Butterfly Network, ricostruzione con 2 petaflop di calcolo) — stesso principio (multistatico, imaging in vasca, tecniche derivate da time-reversal/synthetic aperture), scala enormemente più piccola. Da citare in portfolio come narrativa ("prototipo hobbistico che dimostra lo stesso principio, a scala ridotta"), non da inseguire come target di qualità immagine.
 
 Nessun vincolo di sicurezza clinica: il dispositivo è un dimostratore, non verrà mai usato su altre persone in modo clinico, quindi non serve la trafila di certificazione medicale — resta comunque da trattare con normale attenzione da elettronica RF/HV.
@@ -28,8 +30,9 @@ L'idea a 4 elementi rotanti (Approccio C, esplorata e poi accantonata) resta val
 - **Amplificatore RX**: LM6172IN (THT, DIP-8, ~100MHz banda passante, nessun TGC nello Step 1, guadagno fisso)
 - **ADC**: AD9280ARSZ (8-bit, 32Msps, stesso chip usato da un0rick/pic0rick)
 - **Microcontrollore**: Raspberry Pi Pico H (RP2040) — PIO state machine per timing preciso
-- **Motore + driver + encoder** per rotazione (da definire nello Step 2, non ancora nella lista Step 1)
-- Struttura meccanica di rotazione: da definire nello Step 2
+- **Motore + driver + encoder** per rotazione — NEMA17 + A4988, 200 acquisizioni/giro (dettagli e calcolo in `step2-rotazione-bmode.md`, Sez. 5)
+- **Vasca**: contenitore rigido in Polipropilene (PP), Ø18cm — sonda esterna, mai a contatto con l'acqua, gel accoppiante sulla parete esterna (dettagli e calcolo in `step2-rotazione-bmode.md`, Sez. 2-4)
+- Struttura meccanica di rotazione: anello a raggio fisso 9cm, dimensionato sul diametro vasca
 
 ## Budget stimato — AGGIORNATO (dato reale da carrello TME confermato + acquisti rimanenti)
 Lista dettagliata con codici precisi in file separato (checklist componenti Step 1). **Carrello TME confermato: ~70,75€.** A questo si aggiungono i pezzi ancora da ordinare (trasduttore ~50€ su AliExpress, resistori/capacitori passivi vari, breakout ATX+LM317+dissipatore, adattatore ADC, vasca/target/calibro) — **totale realistico Step 1: ~130-160€**, comunque molto inferiore alla stima iniziale per l'Approccio C (120-320€), grazie a: niente switching matrix, boost HV autocostruito invece di modulo pronto XP Power, trasformatore con filo recuperato invece di acquistato, molti materiali di supporto già posseduti.
@@ -73,4 +76,4 @@ Nota: AVR (Arduino classico) scartato — RP2040 scelto per le PIO state machine
 3. Assemblaggio fisico e collegamenti del circuito Step 1 (pulser, T/R switch, RX, ADC)
 4. Setup ambiente di sviluppo RP2040 (VS Code + Pico SDK) — non ancora iniziato
 5. Test pratici Step 1 (Fasi A-F già definite in dettaglio in documento separato)
-6. Solo dopo Step 1 completo e validato: passare allo Step 2 (motore + encoder per rotazione, ancora da progettare/scegliere componenti)
+6. Solo dopo Step 1 completo e validato: passare allo Step 2 (motore + encoder per rotazione — configurazione vasca/sonda già decisa, vedi `step2-rotazione-bmode.md`: vasca PP Ø18cm, sonda esterna con gel, 200 acquisizioni/giro; resta da assemblare fisicamente)

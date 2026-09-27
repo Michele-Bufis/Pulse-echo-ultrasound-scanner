@@ -18,16 +18,18 @@ Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s, 2 canali, generatore di funzion
 
 | Blocco | Voci principali | Subtotale |
 |---|---|---|
-| Digitale + alimentazione | Raspberry Pi Pico H, zoccoli DIP8 ×3, ATX+breakout+LM317+dissipatore, bleeder resistor, occhiali protezione | ~15-20€ |
+| Digitale + alimentazione | Raspberry Pi Pico H, zoccoli DIP8 ×5, ATX breakout 24pin (AliExpress, confermato), LM317, dissipatore TO-220 (AliExpress, confermato), bleeder resistor, occhiali protezione | ~15-20€ |
 | Pulser + Boost HV | MC33151PG, STP8NK100Z ×2, WIMA FKP1 ×2, UF4007 ×3, UC3843BN, nucleo E20/10/6-3C94, coil former ×2, capacitore 47µF 400V, resistori vari | ~25-30€ |
-| Ricezione + trasduttore | Trasduttore NDT 5MHz (AliExpress), 1N4148 ×2, R4 1-2W, LM6172IN, cavo BNC extra, connettore BNC femmina, resistori/capacitori RX | ~75-85€ |
-| Digitalizzazione + test | AD9280ARSZ, adattatore SSOP28→DIP28, vasca, piastra target, calibro | ~35-40€ |
+| Ricezione + trasduttore | Trasduttore NDT 5MHz 20mm YUSHI/XMSJ 5P20N (AliExpress, confermato, 55,69€), 1N4148 ×2, R4 1-2W, LM6172IN, cavo BNC extra, connettore BNC femmina, resistori/capacitori RX (incl. C6) | ~75-85€ |
+| Digitalizzazione + test | AD9280ARSZ, adattatore SSOP28→DIP28 (ancora da trovare), vasca, piastra target, calibro | ~35-40€ |
 
-**Totale Step 1: ~130-160€** (carrello TME già confermato: ~70,75€)
+**Totale Step 1: ~130-160€** (carrello TME confermato: ~84,70€ — dopo aggiunta batch componenti passivi; verificare disponibilità reale del 10kΩ segnalato a 0 stock prima di ordinare)
 
 ---
 
-## STEP 2 — Rotazione meccanica + primo B-mode (non ancora affrontato in dettaglio)
+## STEP 2 — Rotazione meccanica + primo B-mode (design deciso, dettagli completi in `step2-rotazione-bmode.md`)
+
+Configurazione finale: sonda esterna alla vasca (mai a contatto con l'acqua, gel accoppiante sulla parete), vasca cilindrica in Polipropilene Ø18cm, 200 acquisizioni/giro.
 
 | Cosa | Termine ricerca | Prezzo | Fonte |
 |---|---|---|---|
@@ -37,8 +39,10 @@ Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s, 2 canali, generatore di funzion
 | Filamento PLA (se mancante) | `PLA filament 1kg 1.75mm` | 12-18€/kg | AliExpress |
 | Alimentatore 12V motore | `12V 2A power supply adapter` | 5-10€ | AliExpress |
 | Encoder AS5600 (opzionale) | `AS5600 magnetic encoder module` | 2-4€ | AliExpress |
+| Vasca in PP, Ø18cm | Riciclo (vaschetta gelato) o `contenitore alimentare PP trasparente` | 0-5€ | Casa/supermercato |
+| Gel accoppiante ecografico | `ultrasound gel transmission` | 5-10€ | Amazon/farmacia |
 
-**Subtotale Step 2: ~30-50€**
+**Subtotale Step 2: ~30-55€**
 
 ---
 
@@ -54,8 +58,8 @@ Valutati e messi da parte per budget durante la pianificazione (modulo boost HV 
 |---|---|
 | Strumentazione | 0€ (già posseduta) |
 | Step 1 | 130-160€ |
-| Step 2 | 30-50€ |
-| **Totale attuale (Step 1+2)** | **~160-210€** |
+| Step 2 | 30-55€ |
+| **Totale attuale (Step 1+2)** | **~160-215€** |
 | Step 3-4 (se ripresi in futuro) | +180-220€ |
 
 ---

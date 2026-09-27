@@ -127,6 +127,119 @@ Strumento di debug fondamentale in questa fase: ti permette di vedere direttamen
 
 **Se non vedi nulla:** prova ad aumentare il guadagno RX, verifica l'accoppiamento acustico (niente bolle d'aria sul trasduttore), verifica che il target sia effettivamente nel percorso del fascio.
 
+---
+
+## Analisi di link budget — cosa aspettarsi in termini di segnale, prima di guardare l'oscilloscopio
+
+*Analisi fatta su carta prima dell'assemblaggio, per sapere cosa aspettarsi in Fase D e riconoscere subito se qualcosa non torna rispetto alle previsioni.*
+
+### Passo 1 — Perdita di percorso totale
+Percorso: wear plate → gel → parete vasca PP → acqua → target (pelle/tessuto) → ritorno.
+
+Impedenze acustiche usate (MRayl): cristallo ~30, wear plate ~5 (stima), gel ~1,5, parete PP ~2,0, acqua 1,48, pelle/tessuto ~1,6.
+
+Riflessione al target (pelle vs acqua, impedenze molto vicine):
+```
+R = ((1,6-1,48)/(1,6+1,48))² ≈ 0,0015 (0,15%)
+```
+Solo lo 0,15% dell'energia che arriva sul target torna indietro — coerente con la fisica nota (contorni ecografici netti solo dove l'impedenza cambia molto, es. osso; pelle/tessuto molle riflette pochissimo).
+
+**Perdita totale di percorso (andata+ritorno) ≈ -34,6dB.**
+
+*Verifica di robustezza:* facendo variare l'impedenza del wear plate (stimata, non da datasheet) tra 2 e 10 MRayl, il risultato varia solo tra -34,4dB e -36,7dB — un effetto di compensazione fisica (peggiora la trasmissione in uscita, migliora quella di rientro) rende il numero robusto anche con questa incertezza.
+
+### Passo 2 — Il vero problema: main bang acustico, non solo perdita assoluta
+Oltre al breakthrough elettrico del pulser (già noto: ±0.6-0.7V residui post T/R switch, da simulazione), esiste un secondo segnale forte e distinto: il **main bang acustico** — la riflessione quasi istantanea alla prima interfaccia (wear plate→gel), che rientra nel cristallo senza percorrere la vasca.
+```
+Riflessione wear→gel: R = 1 - T(wear→gel) = 1 - 0,710 = 0,290 (29%)
+Trasmissione di ritorno wear→cristallo: T ≈ 0,490
+Main bang totale: 0,290 × 0,490 = 0,142 → circa -8,5dB
+```
+**Differenza main bang vs eco target: 26,1dB** — è questo il vero problema da tenere d'occhio, non il numero assoluto di perdita.
+
+Il gating temporale (scartare l'inizio della finestra) risolve la **confusione nel tempo** tra main bang ed eco target, ma **non risolve automaticamente** un'eventuale saturazione fisica dell'amplificatore RX (LM6172IN, sigla U2 nello schema di simulazione) — quella richiede che l'op-amp abbia il tempo di uscire dalla saturazione prima che arrivi il segnale utile.
+
+### Passo 3 — Rischio di saturazione dell'amplificatore RX (LM6172IN)
+Dal datasheet LM6172 (non esiste un dato diretto di "overload recovery time"; usato il **settling time** come proxy):
+```
+Settling time (0.1%): 65ns @±15V, 72ns @±5V — il circuito lavora a 12V singola alimentazione,
+valore intermedio stimato ~70ns
+Stima recovery da saturazione vera (fattore di margine tipico 5-10× il settling lineare): 350-700ns
+```
+
+Confronto con il margine di tempo disponibile prima che arrivi l'eco del target, per diverse distanze dal bordo vasca:
+| Distanza dal bordo | Tempo di volo disponibile | Margine vs recovery pessimistico (700ns) |
+|---|---|---|
+| 7cm (dito, caso comodo) | 94,6µs | ~135× |
+| 5cm (polso, caso base) | 67,6µs | ~97× |
+| 3cm (polso decentrato, caso peggiore) | 40,5µs | ~58× |
+
+**Conclusione: il rischio di sovrapposizione temporale main bang/target è trascurabile anche nel caso peggiore.** Resta però un limite: **il dato di sensibilità RX del trasduttore (µV/Pa) non è pubblicato** dal produttore (YUSHI/XMSJ, prodotto NDT economico) — senza quel dato non è possibile calcolare la tensione assoluta che il main bang genera su U2, quindi **non si può escludere con certezza matematica** che l'amplificatore saturi, solo che se satura probabilmente recupera in tempo utile. Argomento di plausibilità aggiuntivo: R4 (100Ω) + D4/D5 sono già dimensionati per il caso peggiore assoluto (breakthrough diretto 140V) — il main bang acustico è per costruzione fisica più debole di quello, quindi non introduce un percorso di rischio nuovo rispetto a quello già gestito dal T/R switch.
+
+**Questo punto non è chiudibile su carta con certezza — verifica empirica necessaria in Fase D**, guardando specificamente l'uscita di U2 subito dopo lo sparo, prima ancora di collegare l'ADC.
+
+### Mitigazioni a costo zero (già adottate)
+1. **Gating firmware ampio:** scartare i primi 3-5µs di ogni acquisizione (non il minimo teorico stretto) — vedi `step2-rotazione-bmode.md`, Sez. 10, punto 5
+2. **Margine operativo minimo nei test:** non centrare il target a meno di ~5cm dal bordo vasca durante le prove — vedi `step2-rotazione-bmode.md`, Sez. 10, punto 6
+
+### Piano di contingenza — se in Fase D si osserva saturazione reale di U2
+Ordine di intervento consigliato, dal meno al più invasivo:
+1. **Allargare ulteriormente il gating** in firmware (zero costo, primo tentativo, 5 minuti)
+2. **Ridurre il guadagno RX** abbassando R7 (attualmente 10kΩ, guadagno ×11 con R6=1kΩ) — es. dimezzare a ~5kΩ per un guadagno ×6; economico, reversibile su breadboard, va bilanciato con la leggibilità dell'eco debole del target
+3. **Partitore resistivo aggiuntivo** su RX_IN, a monte di U2 — attenua main bang e target insieme senza toccare il guadagno; da validare in LTspice prima di saldare, per verificare che non attenui eccessivamente anche il target
+4. **Diodi di clamp aggiuntivi** (idealmente Schottky, più veloci degli 1N4148 già presenti su RX_IN) direttamente sui pin d'ingresso di U2 — tecnica da front-end professionale; attenzione al carico capacitivo aggiuntivo su una banda già "striminzita" a 5MHz (nota da `simulazione_ltspice_handoff.md`)
+5. **Blanking attivo** sincronizzato col trigger (switch/transistor che cortocircuita l'ingresso di U2 per un tempo fisso dopo lo sparo) — più efficace, ma aggiunge complessità firmware e un componente da validare
+6. **TGC minimo** (guadagno variabile nel tempo) — ultima risorsa, già scartata a inizio progetto per complessità/budget
+
+### Confronto quantificato delle opzioni di correzione
+| Opzione | Costo | Tempo intervento | Efficacia | Rischio collaterale |
+|---|---|---|---|---|
+| 1. Gating esteso | 0€ | 5 min | Alta su confusione temporale, zero su saturazione fisica | Nessuno |
+| 2. Riduzione R7 | ~0,10€ | 10-15 min | Alta — riduce swing uscita U2 | Riduce anche il target, in proporzione |
+| 3. Partitore aggiuntivo RX_IN | ~0,20€ | 30-40 min (+sim. LTspice) | Media-alta, attenua tutto | Rischio attenuare troppo il target |
+| 4. Diodi clamp aggiuntivi (Schottky) | ~0,50-1€ | 20-30 min | Alta sui picchi | Capacità parassita su banda già stretta (5MHz) |
+| 5. Blanking attivo | ~2-5€ | Ore | Molto alta, elimina il main bang | Complessità firmware, nuovo punto di guasto |
+| 6. TGC minimo | ~5-15€ | Giorni | Massima, risolve strutturalmente | Sproporzionato al rischio residuo attuale |
+
+**Nota sull'Opzione 2 (la più probabile da usare):** dimezzare R7 da 10kΩ a ~5kΩ porta il guadagno da ×11 (+20,8dB) a ×6 (+15,6dB), una riduzione di -5,2dB **su entrambi** i segnali (main bang e target, proporzionalmente) — non cambia la differenza relativa di 26,1dB tra i due. Utile solo se il sintomo è clipping netto contro i binari di alimentazione, non se il problema è distinguere target da rumore.
+
+**Nota sull'Opzione 1 da sola:** il gating nasconde il main bang nei dati salvati ma non impedisce che U2 sia stato in saturazione poco prima — se il tempo di recovery reale fosse più lungo del previsto, il target arriverebbe comunque "sporco" da un amplificatore non ancora lineare. Va sempre verificato guardando l'oscilloscopio in tempo reale, non fidandosi solo dei dati già campionati/tagliati.
+
+**Combinazione consigliata se serve intervenire:**
+```
+Saturazione lieve/moderata:    Opzione 1 + Opzione 2 (economiche, veloci, reversibili)
+Saturazione severa/prolungata: + Opzione 4 (diodi clamp) come secondo livello
+Ultima risorsa:                Opzione 5 o 6, solo se le precedenti risultano insufficienti
+```
+
+### Protocollo di test mirato per Fase D — isolare saturazione e tempo di recovery
+*Sostituisce/espande i passi 7-9 generici della Fase D sopra, con una sequenza pensata specificamente per rispondere sì/no alla domanda "U2 satura, e per quanto tempo?".*
+
+**Setup oscilloscopio:**
+```
+Canale 1 → uscita di U2 (RX_OUT, prima dell'ADC)
+Canale 2 → segnale di trigger del pulser (riferimento t=0)
+Trigger oscilloscopio → sul fronte di Canale 2 (sincronizzato allo sparo)
+Time/div → partire largo (~20µs/div), poi restringere (~500ns/div) sulla zona critica vicino a t=0
+```
+
+**Sequenza in 4 step, ognuno con criterio di successo/fallimento oggettivo (non a giudizio):**
+
+1. **Baseline, senza target** (vasca vuota di target) — verifica il solo main bang. L'uscita di U2 tocca i binari di alimentazione? Se sì, saturazione confermata; misura quanto tempo passa prima che il segnale torni a un andamento pulito (tempo di recovery reale, sostituisce la stima del Passo 3)
+2. **Target ad alta riflettività** (piastra metallica) — verifica se l'eco compare dopo che U2 è tornato pulito, o si sovrappone ancora al transitorio
+3. **Target realistico** (dito, poi attraverso parete PP+gel come nel setup Step 2 finale) — verifica se l'eco debole vero (riflettività ~0,15%) emerge sopra il rumore residuo di recovery
+4. **Variazione distanza** (3cm, 5cm, 7cm dal punto di sparo) — verifica empirica della tabella di margine del Passo 3
+
+**Criteri di decisione:**
+| Risultato osservato | Azione |
+|---|---|
+| Nessuna saturazione visibile | Nessuna modifica, procedi come pianificato |
+| Saturazione breve, recovery pulito prima dell'eco target | Nessuna modifica |
+| Recovery si sovrappone all'eco solo sotto i 5cm | Margine operativo più conservativo (mai sotto 5cm), zero modifiche hardware |
+| Recovery si sovrappone anche a 5-7cm | Applica piano di contingenza, parti da Opzione 1+2 |
+
+---
+
 ### Fase E — Passaggio al software (dati via microcontrollore)
 10. Ora che sai (con l'oscilloscopio) che il segnale analogico è corretto, colleghi l'uscita dell'amplificatore all'ADC
 11. Il firmware campiona e invia i dati al PC

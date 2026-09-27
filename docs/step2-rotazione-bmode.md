@@ -180,30 +180,134 @@ Un sistema pulse-echo a singolo elemento (Step 1+2) può ricevere **solo** l'eco
 
 ---
 
-## 8. Assemblaggio meccanico — sequenza consigliata
+## 7b. Anatomia della sonda — dove sono TX/RX e cosa serve conoscere per il montaggio
+
+### Geometria reale della sonda (5P20N)
+```
+                ┌──────────┐
+                │   BNC    │  ← cavo verso il circuito, esce lateralmente
+                └────┬─────┘
+                     │
+            ┌────────┴────────┐
+            │                 │
+            │  Corpo cilindrico│  ← alluminio liscio, contiene il cristallo,
+            │   (alluminio)    │     QUI si stringe il morsetto
+            │                 │
+            ├─────────────────┤
+            │  ═══════════    │  ← ghiera zigrinata (estremità OPPOSTA al BNC,
+            │  ═ ZIGRINATA ═  │     NON a metà corpo — ghiera avvitabile che
+            │  ═══════════    │     tiene fermo il wear plate, sostituibile)
+            └────────┬────────┘
+                     │
+                [Wear plate]  ← centro della ghiera, qui escono/entrano
+                     │           gli ultrasuoni — deve restare LIBERO,
+                     ▼           mai coperto dal morsetto
+              Verso il target (parete vasca + gel)
+```
+
+**Importante per il montaggio:** il morsetto deve stringere **solo la zona liscia del corpo cilindrico**, lasciando completamente libera l'estremità con ghiera zigrinata + wear plate, che deve sporgere e restare a diretto contatto (tramite gel) con la parete della vasca.
+
+### Come funziona TX/RX (stesso elemento, stessa faccia)
+Trasmissione e ricezione avvengono dalla **stessa faccia** (il wear plate), tramite lo stesso cristallo piezoelettrico:
+- **TX:** l'impulso elettrico HV dal pulser fa vibrare meccanicamente il cristallo (effetto piezoelettrico inverso) — questa vibrazione È l'onda ultrasonica
+- **RX:** l'eco di ritorno deforma meccanicamente il cristallo, generando una piccola tensione elettrica (effetto piezoelettrico diretto)
+È per questo che nello schema del circuito il trasduttore è il "nodo condiviso pulser/RX" (`TX_NODE`).
+
+### Cos'è il wear plate
+Strato sottile (0,1-0,5mm tipico) davanti al cristallo, con doppia funzione:
+1. **Protezione meccanica** del cristallo fragile (ceramica PZT) dall'usura da contatto
+2. **Matching layer acustico** — impedenza e spessore calcolati per fare da ponte tra l'impedenza alta del cristallo (~30 MRayl) e quella del mezzo esterno (~1,5-2 MRayl), riducendo la riflessione all'interfaccia
+
+Materiale tipico nei probe NDT economici: resina epossidica caricata (metallo/ceramica in polvere), colata sopra il cristallo in produzione. È **piatto e rigido** — nessuna capacità di auto-adattarsi a superfici curve o irregolari, a differenza delle lenti acustiche curve delle sonde mediche (che questa sonda NDT non ha).
+
+Video di riferimento sul principio TX/RX piezoelettrico: https://www.youtube.com/watch?v=I1Bdp2tMFsY
+
+---
+
+## 8. Costruzione del morsetto porta-sonda
+
+### Passo 0 — Misure reali (prerequisito obbligato)
+Quando arriva la sonda, misurare con calibro digitale: diametro esterno del corpo cilindrico, lunghezza totale, eventuali rastremazioni lungo il corpo. Nessun disegno CAD va fatto prima di avere questi numeri reali.
+
+### Strada A — Stampa 3D (consigliata, PLA già in lista acquisti)
+Morsetto a due metà (semi-gusci), lunghezza ~15-20mm, diametro interno = diametro sonda misurato + 0,3-0,4mm di gioco:
+```
+        Vista frontale (lungo l'asse sonda)
+              ┌───────────┐
+             ╱             ╲
+            │   METÀ SUP.   │
+            │  ╭─────────╮  │
+         ───┤  │ Ø sonda │  ├───   ← foro semicircolare
+            │  ╰─────────╯  │
+             ╲             ╱
+              └─────╥─────┘
+                 [foro vite]
+              ┌─────╨─────┐
+             ╱             ╲
+            │   METÀ INF.   │  (idem, speculare)
+             ╲             ╱
+              └───────────┘
+```
+Ogni metà ha alette laterali con foro passante 3mm (vite M3+dado, o autofilettante nel PLA). Sul retro, un **braccio di fissaggio** verso l'asse di rotazione, con **asola rettangolare** (non foro tondo) nel punto di attacco all'anello — permette regolazione radiale fine per compensare imprecisioni nel diametro reale della vasca costruita, prima di stringere la vite definitiva.
+
+**Attenzione al serraggio:** non stringere eccessivamente — il PLA cede sotto pressione eccessiva (rischio di spanare i fori), e il corpo della sonda contiene componenti interni delicati.
+
+### Strada B — Senza stampante (piano B veloce)
+Fascetta stringitubo in metallo (ferramenta, pochi euro) attorno al corpo della sonda, agganciata a un braccio rigido (listello di legno o profilo alluminio) fissato all'anello. Meno regolabile della Strada A, ma funziona subito senza attesa di stampa — utile per un primo test di fattibilità.
+
+### Gestione del cavo BNC durante la rotazione
+```
+   Anello rotante ──── Sonda (BNC)
+                          │
+                     cavo con margine
+                     (ansa morbida)
+                          │
+                    Punto fisso (verso T/R switch)
+```
+Rotazione limitata a ±180° (step-and-shoot) → non serve slip ring. Basta un'ansa morbida di cavo che si avvolge/svolge leggermente, senza mai tendersi — dimensionata sul raggio reale dell'anello una volta costruito.
+
+### Gestione del gel accoppiante
+- **Opzione semplice (consigliata per iniziare):** gel steso in strato abbondante e uniforme **prima di ogni scansione completa** (non ad ogni step) — sufficiente per l'intero giro, vista la durata breve della scansione (6-12s, Sez. 10 punto 3)
+- **Opzione robusta (solo se la prima risultasse insufficiente):** piccolo serbatoio/spugnetta imbevuta di gel montato sull'anello, che rilascia gel fresco continuamente durante la rotazione — più complesso, da valutare solo se necessario
+
+---
+
+## 9. Assemblaggio meccanico — sequenza consigliata
 
 1. Reperire/verificare il contenitore PP scelto (Sez. 3.4) — testare tenuta d'acqua riempiendolo prima di montare qualunque elettronica
 2. Stampa 3D supporto anello, dimensionato per raggio 9cm (vasca Ø18cm) (tolleranze da aggiustare, normale ristampare 1-2 volte)
 3. Montaggio cuscinetto (press-fit, colla/carta vetrata per aggiustare)
 4. Fissaggio motore su supporto separato, allineato per trasmissione a cinghia
 5. Montaggio cinghia GT2, tensione moderata
-6. Montaggio del supporto sonda sull'anello, verificando che la faccia della sonda resti sempre a contatto con la parete esterna della vasca durante tutta la rotazione
-7. Test meccanico puro (anello a mano, senza elettronica)
-8. Collegamento motore-driver-RP2040 (alimentazione motore separata, mai dalla stessa uscita logica)
-9. Test elettrico motore isolato prima di integrare con acquisizione pulse-echo
+6. Costruzione e montaggio del morsetto porta-sonda (Sez. 8), verificando a secco il fit sulla sonda prima di fissarlo definitivamente sull'anello
+7. Montaggio del morsetto sull'anello, con regolazione radiale (asola) libera per la taratura fine
+8. Posiziona la vasca al centro, verifica che il wear plate tocchi la parete con pressione costante ruotando l'anello a mano su tutto il giro (prima di collegare motore/elettronica)
+9. Applica il gel, verifica visivamente che resti a contatto durante una rotazione manuale di prova
+10. Test meccanico puro (anello a mano, senza elettronica)
+11. Collegamento motore-driver-RP2040 (alimentazione motore separata, mai dalla stessa uscita logica)
+12. Solo a questo punto: collega cavo BNC, test elettrico motore isolato prima di integrare con acquisizione pulse-echo
 
 ---
 
-## 9. Firmware — aggiunte rispetto allo Step 1
+## 10. Firmware — aggiunte rispetto allo Step 1
 
 1. Generazione impulsi STEP/DIR per A4988 (GPIO semplice, non serve PIO)
 2. Sequenza step-and-shoot: step motore → settling time (decine di ms) → trigger pulse-echo (blocco Step 1 già validato) → salva linea con angolo → ripeti, per 200 acquisizioni/giro (Sez. 5.4)
-3. Finestra di campionamento dimensionata sul tempo di volo per raggio 9cm — da verificare/estendere rispetto al piano originale (raggio maggiore = tempo di volo maggiore)
+3. **Finestra di campionamento — dimensionamento dettagliato:**
+   - Distanza massima da coprire = diametro pieno vasca (caso peggiore: riverbero dalla parete opposta) = 18cm → tempo di volo andata/ritorno ≈ 243µs
+   - Con margine di sicurezza: **finestra di campionamento consigliata ≈ 300µs**
+   - A 32Msps (max AD9280): **~9.600 campioni per linea**
+   - A 8-bit: **~9,6KB per linea** — ampiamente gestibile nei 264KB SRAM del RP2040 (buffer singolo per linea, invio USB, poi linea successiva)
+   - Trasferimento USB (~1-1,5MB/s realistico) ≈ 7-10ms/linea, trascurabile rispetto al settling meccanico — non è il collo di bottiglia
+   - **Tempo totale stimato per scansione completa (200 acquisizioni) ≈ 6-12 secondi**
+   - Verifica di coerenza: il PRF già validato in LTspice (V4, periodo 1ms = 1kHz) resta ampiamente compatibile con questa finestra (243µs << 1ms), nessun conflitto tra i parametri già simulati e il nuovo scenario a raggio maggiore
 4. Trasferimento dati: ogni pacchetto USB seriale include angolo + campioni
+5. **Margine di gating post-sparo (nota da analisi link budget):** impostare la costante firmware di "inizio finestra valida" con margine abbondante — scartare i primi 3-5µs di ogni acquisizione, non il minimo teorico stretto. Motivo: oltre al breakthrough elettrico del T/R switch (già noto da simulazione), esiste anche un "main bang" acustico (riflessione alla prima interfaccia wear plate→gel, stimata -8,5dB) che può portare U2 vicino/dentro saturazione per un breve transitorio. Il margine di tempo disponibile prima dell'eco target resta comunque ampio anche nel caso peggiore (~58× la stima pessimistica del tempo di recovery, vedi analisi completa in cronologia di progetto) — il margine di gating è quindi precauzionale, a costo zero, non una correzione di un problema confermato
+6. **Nota operativa per i test (non firmware, ma disciplina di setup):** durante i test preliminari, evitare di centrare il target a meno di ~5cm dal bordo della vasca (il diametro 18cm lo permette comodamente) — coerente col margine di gating sopra
 
 ---
 
-## 10. Software di ricostruzione
+## 11. Software di ricostruzione
 
 1. Ogni linea A-mode = vettore ampiezze vs tempo(=profondità), con angolo noto
 2. **Scan conversion**: `x = profondità * cos(angolo)`, `y = profondità * sin(angolo)`
@@ -214,7 +318,7 @@ Un sistema pulse-echo a singolo elemento (Step 1+2) può ricevere **solo** l'eco
 
 ---
 
-## 11. Lista acquisti Step 2 (in aggiunta allo Step 1)
+## 12. Lista acquisti Step 2 (in aggiunta allo Step 1)
 
 | Cosa | Termine ricerca | Fascia prezzo | Fonte |
 |---|---|---|---|
@@ -231,7 +335,7 @@ Un sistema pulse-echo a singolo elemento (Step 1+2) può ricevere **solo** l'eco
 
 ---
 
-## 12. Checklist prima di considerare completato lo Step 2
+## 13. Checklist prima di considerare completato lo Step 2
 
 - [ ] Vasca PP Ø18cm reperita, tenuta d'acqua verificata
 - [ ] Anello (raggio 9cm) ruota liberamente senza attrito, sonda a contatto costante con parete esterna vasca durante tutta la rotazione

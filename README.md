@@ -7,7 +7,7 @@ Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pul
 **Step 1 (pulse-echo singolo elemento, A-mode statico): in fase avanzata**
 - ✅ Architettura definita e documentata
 - ✅ Circuito completo progettato e **validato in simulazione LTspice**
-- ✅ Lista componenti quasi completa — carrello TME confermato ~70,75€, totale realistico Step 1 ~130-160€
+- ✅ Lista componenti quasi completa — carrello TME confermato ~84,70€ (dopo aggiunta batch passivi), trasduttore/breakout ATX/dissipatore già scelti su AliExpress, totale realistico Step 1 ~130-160€
 - 🔄 Assemblaggio fisico: non ancora iniziato
 
 **Step 2 (rotazione meccanica → B-mode): design deciso, assemblaggio fisico non ancora iniziato**
@@ -55,10 +55,15 @@ Bug principale trovato e risolto durante il debug: errore di sintassi nelle unit
 | File | Contenuto |
 |---|---|
 | `progetto_ultrasuoni_handoff.md` | Visione generale del progetto: obiettivo, architettura, roadmap, stack software, riferimenti (un0rick, Murgen) |
-| `step1_pulse_echo_singolo_elemento.md` | Dettaglio Step 1: obiettivo, componenti, collegamenti, procedura di test passo-passo (Fasi A-F), checklist strumenti, errori comuni |
-| `step1_lista_componenti.md` | Prima versione della lista componenti (generica, propedeutica) |
-| `step1_componenti_priorita_tme.md` | **Lista componenti definitiva**, con codici precisi TME/AliExpress, stato acquisto (🟢/🔴), organizzata per ordine di acquisizione |
-| `simulazione_ltspice_handoff.md` | Documentazione completa della simulazione: componenti, netlist per nodo, sostituzioni fatte, bug risolti, risultati di validazione |
+| `pre-progetto-ultrasuoni-DIY.md` | Contesto tecnico/fisico minimo prima di affrontare lo Step 1 (fisica base, sicurezza HV, checklist pre-acquisto) |
+| `step1_pulse_echo_singolo_elemento.md` | Dettaglio Step 1: obiettivo, componenti, collegamenti, procedura di test passo-passo (Fasi A-F), analisi link budget e piano di contingenza saturazione RX, checklist strumenti, errori comuni |
+| `step1_componenti_priorita_tme.md` | **Lista componenti definitiva Step 1**, con codici precisi TME/AliExpress, stato acquisto (🟢/🟡/🔴), organizzata per ordine di acquisizione |
+| `codici-distributore-verificati.md` | Codici TME verificati con stato stock, per i componenti Step 1 |
+| `lista-acquisti-completa.md` | Riepilogo acquisti dall'inizio alla fine del progetto (Step 1+2), con subtotali e budget complessivo |
+| `simulazione_ltspice_handoff.md` | Documentazione completa della simulazione: componenti, netlist per nodo, sostituzioni fatte, bug risolti (incluso l'errore di topologia T/R switch corretto), risultati di validazione |
+| `step2-rotazione-bmode.md` | Dettaglio Step 2: configurazione vasca/sonda (cronologia scelte), materiale e dimensionamento vasca, calcolo acquisizioni/giro, anatomia sonda, costruzione morsetto, firmware, software di ricostruzione |
+| `step3-switching-matrix.md` | Switching matrix a 4 elementi — accantonato per budget, documentato come stretch goal futuro |
+| `step4-fusione-multistatica.md` | Fusione multistatica (Delay-and-Sum) — accantonato per budget, dipende da Step 3, documentato come stretch goal futuro |
 
 ## Stack software (pianificato)
 

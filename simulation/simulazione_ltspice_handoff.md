@@ -3,6 +3,8 @@
 ## Contesto
 Simulazione del circuito Step 1 (pulse-echo singolo elemento, trasduttore 5MHz) prima dell'acquisto/assemblaggio fisico dei componenti, per verificare errori di dimensionamento. Software: **LTspice** (gratuito, Analog Devices). L'utente ha già esperienza pregressa con KiCad ma non con simulazione SPICE.
 
+> ⚠️ **Revisione del 29/09/2026** (vedi `revisione-progetto-29-09-2026.md`): una revisione approfondita ha individuato diversi problemi in questo file, non ancora verificati su `Eco.asc` con una simulazione `.op`/`.ac` reale — sono calcoli a mano [C] o ipotesi [I], non risultati di simulazione. Legenda usata da qui in poi: **[V]** verificato sul file reale, **[C]** calcolato a mano (non simulato), **[I]** ipotesi/stima, **[?]** aperto, richiede verifica. I dettagli completi sono nel file di revisione.
+
 ## Stato attuale: TUTTI I COMPONENTI PIAZZATI E CONFIGURATI — manca solo il collegamento dei nodi (wiring)
 
 ---
@@ -21,14 +23,21 @@ Simulazione del circuito Step 1 (pulse-echo singolo elemento, trasduttore 5MHz) 
 | Rif. | Valore | Note |
 |---|---|---|
 | M1 | Modello custom **MYFET** | MOSFET boost |
-| L1 | 10µH | Primario trasformatore (valore di partenza, da raffinare con calcoli su nucleo reale E20/10/6) |
-| L2 | 1mH | Secondario trasformatore |
-| Accoppiamento | `K1 L1 L2 0.98` | Direttiva SPICE da aggiungere sul foglio se non già presente — **verificare che sia stata inserita** |
-| D1 | 1N4007 | Rettificatore uscita boost (sostituto di UF4007, non disponibile in libreria base) |
+| L1 | ~~10µH~~ → **≈87µH [C]** | Primario trasformatore — ricalcolato (29/09/2026) da dimensionamento DCM reale: f=100kHz, Vin=12V, D=0.4, Vout=142V, Pout≈1W, η=75%. Il valore 10µH era una stima di partenza mai verificata sul nucleo reale. Vedi `revisione-progetto-29-09-2026.md` Sez. 5.1 per il calcolo completo |
+| L2 | ~~1mH~~ → **≈4,3mH [C]** | Secondario trasformatore — rapporto spire Np:Ns ≈ 7:1 (20:140 spire stimate), non più 10:1 |
+| Accoppiamento | `K1 L1 L2 0.98` → **K≈0,95-0,98 [C]** | Il valore K=1 usato nelle direttive finali (sotto) era probabilmente un refuso — K=1 è fisicamente irraggiungibile (accoppiamento perfetto), va corretto |
+| D1 | 1N4007 | Rettificatore uscita boost (sostituto di UF4007, non disponibile in libreria base) — **[?] nota aperta**: a 100kHz un 1N4007 reale (recovery lento) non sarebbe rappresentativo; nel circuito fisico va usato UF4007 (già in carrello), la simulazione con 1N4007 sottostima il problema di recovery |
 | C1 | 47µF | Filtro uscita boost (elettrolitico HV, valore corretto — NON usare il capacitore pulse WIMA qui, errore di dimensionamento individuato e corretto in una sessione precedente) |
-| R1 | 1Ω | Current sense per controller PWM |
-| R2 | 10kΩ | Partitore feedback (superiore) |
-| R3 | 1kΩ | Partitore feedback (inferiore) |
+| R1 | 1Ω | Current sense per controller PWM — **[C] verificato compatibile**: Ipk primario stimato ≈0,55A → caduta ≈0,55V, sotto la soglia tipica di corrente UC3843 |
+| R2 | ~~10kΩ~~ → **≈560kΩ (o 2×270kΩ in serie) [C]** | Partitore feedback (superiore) — **ricalcolato**, vedi nota critica sotto |
+| R3 | ~~1kΩ~~ → **10kΩ [C]** | Partitore feedback (inferiore) — ricalcolato insieme a R2 |
+
+### ⚠️ Correzione critica — partitore di feedback boost mai dimensionato per 142V
+Il valore precedente (R2=10kΩ, R3=1kΩ) **non produce 142V** una volta chiuso il loop di feedback reale sull'UC3843BN: con riferimento interno ≈2,5V, `Vout = 2,5×(1+R2/R3) = 2,5×(1+10) = 27,5V`, non 142V. Il "boost stabile a 142V" osservato in simulazione era conseguenza del **duty cycle fisso** imposto da V2/V3/U1 (il loop non era mai chiuso — R2/R3 erano solo monitoraggio, vedi netlist sotto), non di una regolazione funzionante.
+
+**Valori corretti per Vout≈142V:** R3=10kΩ, R2≈560kΩ (split in 2×270kΩ per tenuta di tensione) → dissipazione ≈35mW (trascurabile, contro i ≈0,35W della combinazione errata R2=56kΩ/R3=1kΩ che si otterrebbe scalando ingenuamente il rapporto). **Aggiungere uno zener di clamp sul pin feedback** come sicurezza contro fuga di tensione se il partitore si scollega accidentalmente.
+
+**Impatto sulla lista acquisti:** il codice MF01SFF1002A10 (10kΩ) a 0 stock serve ora per R3 + R7 + R9 + R10 (4 pezzi, non più R2). R2 richiede invece 2× resistori 270kΩ, non ancora in lista.
 
 ### Blocco pulser
 | Rif. | Valore | Note |
@@ -48,16 +57,16 @@ Simulazione del circuito Step 1 (pulse-echo singolo elemento, trasduttore 5MHz) 
 ### Blocco trasduttore (modello Butterworth-Van Dyke, target 5MHz)
 | Rif. | Valore | Note |
 |---|---|---|
-| C3 | 20pF | Capacità statica cristallo (ramo parallelo) |
+| C3 | 20pF | Capacità statica cristallo (ramo parallelo) — **[I] irrealistico**: per un disco PZT Ø20mm a 5MHz l'ordine di grandezza atteso è nF (stima 1-12nF secondo εr/spessore/area), non pF. Da misurare sul trasduttore reale appena arriva (procedura in `revisione-progetto-29-09-2026.md` Sez. 6) |
 | R5 | 50Ω | Ramo serie (resistenza) |
 | L3 | 50µH | Ramo serie (induttanza) |
-| C4 | 20fF | Ramo serie (capacità) — valori R5/L3/C4 di partenza plausibili per risonanza ~5MHz, DA VALIDARE con calcolo preciso in sessione futura |
+| C4 | ~~20fF~~ | Ramo serie (capacità) — **⚠️ [?] incoerenza non risolta**: con L3=50µH e C4=20fF la risonanza serie teorica sarebbe ≈159MHz, non i 5,03MHz misurati in simulazione. Il valore di risonanza osservato è numericamente coerente con L=50µH e **C=20pF** (non 20fF) — ma non è chiaro se la risonanza osservata provenga davvero dal ramo serie o da un'interazione con C3 (che è in parallelo, non in serie a L3). **Richiede uno sweep `.ac` dedicato** sulla sola impedenza del trasduttore per chiarire l'origine reale prima di fidarsi del modello |
 
 ### Blocco amplificatore RX
 | Rif. | Valore | Note |
 |---|---|---|
 | U2 | **LT1360** (modello reale libreria LTspice) | 50MHz banda, 800V/µs — sostituisce LM6172IN (non trovato in libreria base). Banda ad anello chiuso effettiva ridotta dal guadagno impostato (~50MHz/11 ≈ 4.5MHz nominale, margine ancora sufficiente su 5MHz ma striminzito — da monitorare in simulazione, eventuale upgrade a LT1224 se segnale troppo attenuato) |
-| R6 | 1kΩ | Rete di guadagno (ingresso) |
+| R6 | 1kΩ | Rete di guadagno (ingresso) — **⚠️ [?] bug potenziale, non verificato**: nella netlist sotto, R6(2) va a GND senza capacitore in serie. Con RX_IN polarizzato a ≈6V (dal partitore R9/R10), un guadagno DC ×11 su quel bias richiederebbe un'uscita teorica di ~66V — impossibile, l'op-amp satura sul binario (~11-12V). **Se confermato con `.op` su `Eco.asc`** (leggere V(RX_IN), V(RX_FB), V(RX_OUT)), la correzione è: inserire un condensatore 100nF-1µF **in serie a R6** (tra nodo RX_FB e R6), che sposta il guadagno a ×1 in DC e ×11 solo in AC (frequenza di taglio ≈160Hz-1,6kHz, lontanissima da 5MHz) |
 | R7 | 10kΩ | Rete di guadagno (feedback) — guadagno risultante ~×11 |
 | C5 | 10pF | Compensazione/filtro |
 
@@ -124,6 +133,9 @@ Una versione precedente di questa tabella documentava erroneamente D4/D5 collega
 
 **Motivo fisico:** se D4/D5 fossero collegati direttamente su TX_NODE (senza R4 a monte), dovrebbero assorbire l'intera corrente di scarica del pulser (~140V su C2 4.7nF) senza alcun limite — distruzione istantanea dei diodi, nessun impulso trasmesso al trasduttore. Con R4 (100Ω) prima dei diodi, il picco HV viene limitato in corrente (I ≈ 130V/100Ω ≈ 1.3A) prima che i diodi clampino il residuo a ±0.6-0.7V — è anche il motivo per cui R4 deve essere un resistore 1-2W film metallico (tenuta al picco istantaneo), non un 1/4W standard. In ricezione, l'eco (mV) attraversa R4 con perdita trascurabile verso l'alta impedenza d'ingresso dell'op-amp, mentre i diodi restano spenti sotto la soglia di conduzione (~0.7V).
 
+## ⚠️ BOM incompleta per UC3843BN (nota aggiunta in revisione 29/09/2026)
+Nella simulazione, i componenti di contorno tipici dell'UC3843BN (RT/CT per fissare la frequenza di oscillazione, rete di compensazione sul pin COMP, filtro RC sul pin current sense, resistenza di gate + pulldown) sono sostituiti da generatori/blocchi ideali (V2/V3/U1/S1). Nel circuito fisico questi componenti **mancano dalla checklist acquisti** — da aggiungere prima di ordinare (vedi `step1_componenti_priorita_tme.md`).
+
 ## COMPONENTI AGGIUNTI DURANTE IL DEBUG (non nella lista acquisti fisici originale)
 | Rif. | Valore | Ruolo | Da valutare per hardware reale? |
 |---|---|---|---|
@@ -134,29 +146,37 @@ Una versione precedente di questa tabella documentava erroneamente D4/D5 collega
 ## BUG CRITICO RISOLTO — errore sintassi unità di misura
 Causa di ~4 iterazioni di debug (BOOST_OUT a 0V/femtovolt): sintassi SBAGLIATA `10 L`, `47 C`, `50 L`, `10 C` (spazio + lettera unità) → SPICE legge in unità BASE (Henry/Farad), errore ×1.000.000. **Corretto in:** `10u`, `47u`, `50u`, `10u` (numero+prefisso attaccato, no spazio, no lettera finale). Componenti: L1, C1, L3, C6.
 
-## DIRETTIVE FINALI (sostituiscono le versioni precedenti)
+## DIRETTIVE FINALI (sostituiscono le versioni precedenti) — ⚠️ da aggiornare con i valori ricalcolati
 ```
 .model MYFET NMOS(Vto=4 Kp=20 Rd=0.1)
 .model SW SW(Ron=1 Roff=1Meg Vt=2.5 Vh=0.1)
-K1 L1 L2 1
+K1 L1 L2 0.95          ← CORRETTO (29/09/2026): K=1 era un refuso, fisicamente irraggiungibile
 .tran 0 3 0 5n          (validazione completa fino a stabilizzazione boost)
 .tran 0 1.1m 1m 5n      (debug rapido su finestra specifica)
 ```
-**Nota:** K1 finale = 1 (non 0.98 come da progetto iniziale — verificare se intenzionale o refuso).
+**Nota risolta:** K1=1 nella versione precedente era effettivamente un refuso (confermato in revisione) — un accoppiamento perfetto (K=1) non è fisicamente ottenibile in un trasformatore reale. Usare K≈0,95-0,98. **Da applicare insieme ai nuovi valori L1≈87µH, L2≈4,3mH** (vedi tabella Blocco boost HV sopra) — i tre cambiamenti vanno fatti insieme prima di rilanciare la simulazione.
 
-## ✅ RISULTATO FINALE — SIMULAZIONE COMPLETAMENTE VALIDATA
+## ⚠️ RISULTATO FINALE — SIMULAZIONE VALIDATA SOLO PARZIALMENTE (rivisto 29/09/2026)
 
-| Blocco | Esito | Valore misurato |
-|---|---|---|
-| Boost (BOOST_OUT) | ✅ Validato | Sale progressivamente, si stabilizza a **~142-143V** (dentro range target 100-300V) |
-| Pulser (TX_NODE) | ✅ Validato | Impulso netto 200ns coerente |
-| T/R switch | ✅ Validato | Limita da ±140V (pre-diodi) a ±0.6-0.7V (post-diodi) |
-| Trasduttore (Butterworth-Van Dyke) | ✅ Validato | Risonanza misurata: **5.032.921 Hz ≈ 5,03MHz** (scarto 0,7% da target, trascurabile) |
-| RX (RX_OUT) | ✅ Validato | Baseline ~6V (bias corretto), oscillazione trasduttore confermata |
+*Titolo precedente ("COMPLETAMENTE VALIDATA") non più accurato — una revisione ha individuato problemi non verificati. Vedi `revisione-progetto-29-09-2026.md` per l'analisi completa.*
 
-**Conclusione: il circuito si comporta come progettato, nessun errore concettuale rimasto.** L'unico vero blocco era il bug sintassi unità (risolto). Metodo di debug efficace: procedere blocco per blocco dalla sorgente verso l'uscita, zoom progressivi sul grafico per isolare fenomeni ad alta frequenza (5MHz invisibile su finestre larghe, serviva zoom a singoli microsecondi + passo forzato 5ns).
+| Blocco | Esito | Valore misurato | Stato dopo revisione |
+|---|---|---|---|
+| Boost (BOOST_OUT) | Duty fisso, non regolazione reale | Si stabilizza a **~142-143V** | **[?] Il loop di feedback non era mai chiuso** (R2/R3 solo monitoraggio) — il valore 142V è conseguenza del duty cycle fisso imposto da V2/V3, non di un partitore funzionante. Con R2/R3 originali e loop chiuso si otterrebbero solo 27,5V. Ricalcolati R2≈560kΩ, R3=10kΩ (vedi sopra) |
+| Pulser (TX_NODE) | Plausibile, non rivalidato | Impulso netto 200ns coerente | **[?]** La topologia C2/D2/D3/M2/R12 non è stata riverificata in dettaglio — non è chiaro dalla netlist come C2 si carichi esattamente. Da rivedere |
+| T/R switch | ✅ Validato | Limita da ±140V (pre-diodi) a ±0.6-0.7V (post-diodi) | Risultato confermato, non impattato dalla revisione |
+| Trasduttore (Butterworth-Van Dyke) | Numericamente plausibile, origine non chiarita | Risonanza misurata: **5.032.921 Hz ≈ 5,03MHz** | **[?]** Coerente con L=50µH e C=20pF, ma il componente C4 nel modello è 20fF (non 20pF) — non chiaro se la risonanza osservata provenga dal ramo serie o da un'interazione con C3. Richiede sweep `.ac` dedicato |
+| RX (RX_OUT) | **Sospetto bug non verificato** | Baseline ~6V (bias corretto) | **[?]** Se R6 non ha condensatore in serie (vedi tabella Blocco RX sopra), un guadagno DC ×11 sul bias di 6V dovrebbe saturare l'uscita (~66V teorici vs ~11-12V di binario) — il valore "6V" osservato non è ovviamente coerente con questo scenario. Possibili spiegazioni non verificate: misura presa su RX_IN invece di RX_OUT, condensatore presente ma non documentato, transitorio non assestato. **Richiede `.op` su `Eco.asc`** per chiarire, prima di qualsiasi altra modifica al blocco RX |
 
-## Prossimi passi possibili
-1. Valutare se aggiungere R11/R12/C6 alla lista acquisti fisici reali (file step1_componenti_priorita_tme.md)
-2. Eventuale ottimizzazione fine (non bloccante): alzare tensione boost verso l'alto del range se si vuole più margine, chiudere il vero loop di feedback (attualmente R2/R3 solo monitoraggio, non collegato)
-3. Procedere con assemblaggio fisico Step 1, forte della validazione elettrica ottenuta in simulazione
+**Conclusione aggiornata:** il circuito **non è pienamente validato** come affermato in precedenza — restano almeno due punti [?] da chiarire con una simulazione `.op`/`.ac` reale (feedback boost, blocco RX) prima di procedere con fiducia all'assemblaggio fisico di quei blocchi specifici. Il T/R switch resta confermato. Il bug di sintassi unità di misura (sotto) resta comunque risolto correttamente. Metodo di debug efficace confermato: procedere blocco per blocco, zoom progressivi sul grafico per isolare fenomeni ad alta frequenza.
+
+## Prossimi passi possibili — AGGIORNATO (ordine di lavoro concordato in revisione)
+1. **Eseguire `.op` su `Eco.asc`**; leggere V(RX_IN), V(RX_FB), V(RX_OUT) — chiude il dubbio sul bug R6
+2. Ordinare **solo il trasduttore 5P20N** nel frattempo (il resto del carrello TME resta congelato in attesa dei ricalcoli)
+3. Alla consegna del trasduttore: misurare C0 e curva di impedenza reale (procedura in `revisione-progetto-29-09-2026.md` Sez. 6), poi eco da piastra attraverso parete PP+gel
+4. Aggiornare `Eco.asc` con i valori misurati; chiudere davvero il loop di feedback boost (R2≈560kΩ, R3=10kΩ); ricostruire il modello BVD con i parametri reali
+5. Calcolare/avvolgere il trasformatore secondo i nuovi valori (L1≈87µH, L2≈4,3mH, 20:140 spire); progettare l'interfaccia U2→ADC (non ancora esistente in nessun file, vedi nota sotto); definire il clock PIO a 31,25MHz (non 32MHz, vedi `step1_pulse_echo_singolo_elemento.md`)
+6. Solo a quel punto confermare la distinta acquisti TME aggiornata
+
+## ⚠️ Nota aperta — interfaccia U2 → ADC mai progettata
+In nessun file del progetto l'uscita di U2 (RX_OUT, bias ≈6V) risulta collegata all'ingresso dell'AD9280 (AVDD tipicamente 2,7-3,6V, span atteso 0-2V). Un collegamento diretto rischia sovratensione sull'ingresso dell'ADC. Serve progettare: accoppiamento AC dall'uscita di U2, ribias a ≈1V (centro dello span 0-2V, es. partitore ~22k/10k da un riferimento 3,3V), clamp (Schottky) verso AVDD/GND dell'ADC, filtro anti-aliasing. Dettagli e valori indicativi in `revisione-progetto-29-09-2026.md` Sez. 5.4 — non ancora un progetto definitivo, richiede verifica di span/REFSENSE sul datasheet AD9280.

@@ -1,6 +1,8 @@
 # Step 4 — Fusione multistatica (ACCANTONATO — stretch goal futuro, dipende da Step 3)
 
 > ⚠️ **Stato aggiornato: come lo Step 3 da cui dipende, questo step è accantonato per budget.** Il progetto attuale procede con singolo elemento + rotazione meccanica (Step 2). Questo documento resta come riferimento tecnico/algoritmico se in futuro si riprende l'estensione multistatica.
+>
+> **Nota aggiunta in revisione (29/09/2026):** il principio di fondo (Delay-and-Sum / backprojection, sommare contributi da più punti di vista geometrici) non è più esclusivo di questo step multistatico accantonato — una versione più semplice, **backprojection di inviluppo a singolo elemento rotante**, è stata pianificata direttamente in Step 2 (vedi `step2-rotazione-bmode.md`, Sez. 11 punto 7), sfruttando la ridondanza della rotazione a 360° senza serve relè/switching matrix. Questo Step 4 resta comunque rilevante se in futuro si vuole la versione multistatica vera (più punti di vista fisici simultanei, non solo nel tempo).
 
 Nota preliminare: è lo step dove il progetto passa dall'ingegneria elettronica pura all'algoritmica di elaborazione segnale — se ripreso, richiede pochissimo hardware aggiuntivo oltre allo Step 3.
 

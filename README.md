@@ -4,10 +4,10 @@ Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pul
 
 ## Stato del progetto
 
-**Step 1 (pulse-echo singolo elemento, A-mode statico): in fase avanzata**
+**Step 1 (pulse-echo singolo elemento, A-mode statico): in fase avanzata, con punti aperti dopo revisione**
 - ✅ Architettura definita e documentata
-- ✅ Circuito completo progettato e **validato in simulazione LTspice**
-- ✅ Lista componenti quasi completa — carrello TME confermato ~84,70€ (dopo aggiunta batch passivi), trasduttore/breakout ATX/dissipatore già scelti su AliExpress, totale realistico Step 1 ~130-160€
+- 🔄 Circuito progettato e impostato in simulazione LTspice — **validazione solo parziale** (una revisione del 29/09/2026 ha trovato un partitore di feedback boost mai dimensionato per 142V e un possibile bug sul guadagno RX, non ancora verificati con una simulazione `.op` reale — vedi `revisione-progetto-29-09-2026.md`)
+- 🔄 Lista componenti **congelata in attesa dei ricalcoli** — il totale ~84,70€ include valori ora superati (R2/R3, possibile rimozione LM317). Ordine consigliato: solo il trasduttore per ora (55,69€)
 - 🔄 Assemblaggio fisico: non ancora iniziato
 
 **Step 2 (rotazione meccanica → B-mode): design deciso, assemblaggio fisico non ancora iniziato**
@@ -18,7 +18,9 @@ Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pul
 
 ## Obiettivo e aspettative realistiche
 
-Il sistema produce un'immagine **B-mode in scala di grigi**, con speckle (rumore a grana tipico degli ultrasuoni), contorni netti solo dove c'è forte differenza di impedenza acustica (pelle, osso), ombra acustica dietro l'osso. **Non è raggiungibile una qualità tipo RM o TAC** — tecnologie fisicamente diverse, irraggiungibili a livello hobbistico. Riferimento onesto: ecografia muscoloscheletrica clinica (polso/tendini).
+Il sistema produce un'immagine **B-mode in scala di grigi**, con speckle (rumore a grana tipico degli ultrasuoni), contorni netti solo dove c'è forte differenza di impedenza acustica (pelle, osso), ombra acustica dietro l'osso. **Non è raggiungibile una qualità tipo RM o TAC** — tecnologie fisicamente diverse, irraggiungibili a livello hobbistico.
+
+> ⚠️ **Aspettativa ulteriormente ridimensionata in revisione (29/09/2026)**: il trasduttore (Ø20mm, 5MHz) ha un campo vicino di ≈338mm — l'intera vasca (18cm) resta dentro questa zona, quindi il fascio non è mai focalizzato e la risoluzione laterale realistica è dell'ordine della **larghezza del fascio (~20mm)**, non del millimetro. Un dito (~15mm) risulta una macchia indistinta più che una forma dettagliata. Il riferimento "ecografia muscoloscheletrica clinica" (sonde 10-18MHz con array focalizzati elettronicamente) resta utile per spiegare l'obiettivo, ma la qualità raggiungibile da questo sistema a elemento singolo è più lontana da quel riferimento di quanto suggerito in precedenza. Dettagli in `step2-rotazione-bmode.md`, Sez. 4bis.
 
 **Nota sulla configurazione reale:** a differenza del concetto iniziale (anello di trasduttori immerso), la sonda nello Step 2 resta **esterna** alla vasca (contact-type non impermeabile), a contatto con la parete esterna tramite gel — solo il target (dito/polso) è immerso. Vedi `step2-rotazione-bmode.md` per la cronologia della scelta.
 
@@ -38,32 +40,33 @@ Il sistema produce un'immagine **B-mode in scala di grigi**, con speckle (rumore
 
 ## Simulazione LTspice
 
-Circuito completo validato in LTspice prima dell'assemblaggio fisico. Risultati:
+⚠️ **Validazione solo parziale** (rivisto 29/09/2026 — vedi `revisione-progetto-29-09-2026.md`), non "completa" come affermato in precedenza:
 
 | Blocco | Esito |
 |---|---|
-| Boost | ✅ Si stabilizza a ~142V (range target 100-300V) |
-| Pulser | ✅ Impulso netto 200ns |
-| T/R switch | ✅ Limita da ±140V a ±0.6-0.7V |
-| Trasduttore (Butterworth-Van Dyke) | ✅ Risonanza 5.03MHz (target 5MHz, scarto 0.7%) |
-| RX | ✅ Segnale amplificato coerente |
+| Boost | 🔄 Duty fisso osservato a ~142V, **ma il loop di feedback reale non era mai stato chiuso correttamente** — ricalcolato (R2≈560kΩ, R3=10kΩ) |
+| Pulser | 🔄 Impulso netto 200ns osservato, ma la topologia C2/D2/D3 non è stata riverificata in dettaglio |
+| T/R switch | ✅ Limita da ±140V a ±0.6-0.7V — confermato, non impattato dalla revisione |
+| Trasduttore (Butterworth-Van Dyke) | 🔄 Risonanza 5.03MHz osservata, ma un valore del modello (C4=20fF) è incoerente con L3=50µH per quella frequenza — origine della risonanza da chiarire con uno sweep `.ac` |
+| RX | 🔄 **Sospetto bug non verificato**: un resistore (R6) senza condensatore in serie potrebbe causare saturazione dell'uscita — richiede un `.op` su `Eco.asc` |
 
-Bug principale trovato e risolto durante il debug: errore di sintassi nelle unità di misura (`10 L` invece di `10u` — letto come 10 Henry invece di 10µH, fattore di errore 1.000.000×). Dettagli completi, netlist, e cronologia del debug in `simulazione_ltspice_handoff.md`.
+Bug di sintassi unità di misura (`10 L` invece di `10u`) resta risolto correttamente. Dettagli completi, netlist aggiornata, e cronologia della revisione in `simulazione_ltspice_handoff.md` e `revisione-progetto-29-09-2026.md`.
 
 ## File nella repository
 
 | File | Contenuto |
 |---|---|
+| `revisione-progetto-29-09-2026.md` | **Revisione tecnica approfondita** (metodo multi-prospettiva + peer review): registro problemi trovati, livelli di certezza [V]/[C]/[I]/[?], dimensionamenti ricalcolati, procedura di misura del trasduttore, ordine di lavoro concordato |
 | `progetto_ultrasuoni_handoff.md` | Visione generale del progetto: obiettivo, architettura, roadmap, stack software, riferimenti (un0rick, Murgen) |
 | `pre-progetto-ultrasuoni-DIY.md` | Contesto tecnico/fisico minimo prima di affrontare lo Step 1 (fisica base, sicurezza HV, checklist pre-acquisto) |
-| `step1_pulse_echo_singolo_elemento.md` | Dettaglio Step 1: obiettivo, componenti, collegamenti, procedura di test passo-passo (Fasi A-F), analisi link budget e piano di contingenza saturazione RX, checklist strumenti, errori comuni |
-| `step1_componenti_priorita_tme.md` | **Lista componenti definitiva Step 1**, con codici precisi TME/AliExpress, stato acquisto (🟢/🟡/🔴), organizzata per ordine di acquisizione |
-| `codici-distributore-verificati.md` | Codici TME verificati con stato stock, per i componenti Step 1 |
-| `lista-acquisti-completa.md` | Riepilogo acquisti dall'inizio alla fine del progetto (Step 1+2), con subtotali e budget complessivo |
-| `simulazione_ltspice_handoff.md` | Documentazione completa della simulazione: componenti, netlist per nodo, sostituzioni fatte, bug risolti (incluso l'errore di topologia T/R switch corretto), risultati di validazione |
-| `step2-rotazione-bmode.md` | Dettaglio Step 2: configurazione vasca/sonda (cronologia scelte), materiale e dimensionamento vasca, calcolo acquisizioni/giro, anatomia sonda, costruzione morsetto, firmware, software di ricostruzione |
+| `step1_pulse_echo_singolo_elemento.md` | Dettaglio Step 1: obiettivo, componenti, collegamenti, procedura di test passo-passo (Fasi A-F), analisi link budget e piano di contingenza saturazione RX, timing PIO (generazione clock ADC + cattura sincronizzata), procedura di misura del trasduttore, checklist strumenti, errori comuni |
+| `step1_componenti_priorita_tme.md` | **Lista componenti Step 1** (ordine congelato in attesa dei ricalcoli di revisione), con codici precisi TME/AliExpress, stato acquisto (🟢/🟡/🔴), bilancio di potenza ATX (LM317 probabilmente non necessario) |
+| `codici-distributore-verificati.md` | Codici TME verificati con stato stock, per i componenti Step 1 (valori aggiornati dopo revisione) |
+| `lista-acquisti-completa.md` | Riepilogo acquisti dall'inizio alla fine del progetto (Step 1+2), con subtotali e budget complessivo — totale non più definitivo dopo revisione |
+| `simulazione_ltspice_handoff.md` | Documentazione della simulazione: componenti, netlist per nodo, sostituzioni fatte, bug risolti, **punti aperti dopo revisione** (feedback boost, sospetto bug RX, modello BVD) |
+| `step2-rotazione-bmode.md` | Dettaglio Step 2: configurazione vasca/sonda (cronologia scelte), materiale e dimensionamento vasca, calcolo acquisizioni/giro, anatomia sonda, costruzione morsetto, firmware, software di ricostruzione (formula scan conversion corretta, backprojection di inviluppo) |
 | `step3-switching-matrix.md` | Switching matrix a 4 elementi — accantonato per budget, documentato come stretch goal futuro |
-| `step4-fusione-multistatica.md` | Fusione multistatica (Delay-and-Sum) — accantonato per budget, dipende da Step 3, documentato come stretch goal futuro |
+| `step4-fusione-multistatica.md` | Fusione multistatica (Delay-and-Sum) — accantonato per budget, dipende da Step 3; principio DAS ora applicato anche in Step 2 come backprojection a singolo elemento |
 
 ## Stack software (pianificato)
 
@@ -84,13 +87,18 @@ Bug principale trovato e risolto durante il debug: errore di sintassi nelle unit
 
 Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s) con generatore di funzioni integrato, Raspberry Pi 4B (elaborazione), multimetro, saldatore.
 
-## Prossimi passi
+## Prossimi passi — AGGIORNATO dopo revisione del 29/09/2026
 
-1. Chiudere gli ultimi acquisti 🔴 in `step1_componenti_priorita_tme.md`
-2. Assemblaggio fisico del circuito Step 1
-3. Setup firmware RP2040 (Pico SDK + PIO)
-4. Test pratici secondo le fasi A-F documentate
-5. Step 2: ordinare componenti meccanici (motore NEMA17+A4988, vasca PP Ø18cm, gel accoppiante) e assemblare — design già deciso, vedi `step2-rotazione-bmode.md`
+1. **Eseguire `.op` su `Eco.asc`** per chiarire il sospetto bug sul blocco RX (vedi `revisione-progetto-29-09-2026.md`)
+2. **Ordinare per ora solo il trasduttore 5P20N** — il resto del carrello TME resta congelato
+3. Alla consegna del trasduttore: misurare C0 e curva di impedenza reale (procedura in `step1_pulse_echo_singolo_elemento.md`)
+4. Aggiornare `Eco.asc` con i valori misurati, chiudere il vero loop di feedback boost, ricostruire il modello BVD
+5. Calcolare/avvolgere il trasformatore con i nuovi valori, progettare l'interfaccia U2→ADC, definire il clock PIO a 31,25MHz
+6. **Solo a quel punto** confermare e finalizzare l'ordine TME aggiornato
+7. Assemblaggio fisico del circuito Step 1
+8. Setup firmware RP2040 (Pico SDK + PIO)
+9. Test pratici secondo le fasi A-F documentate (incluso il protocollo di test mirato per saturazione RX)
+10. Step 2: ordinare componenti meccanici e assemblare — design deciso, vedi `step2-rotazione-bmode.md`
 
 ---
 

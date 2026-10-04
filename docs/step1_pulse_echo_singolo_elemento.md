@@ -25,7 +25,7 @@ Circuito di protezione tra il pulser e lo stadio di amplificazione. Subito dopo 
 Amplifica il debole segnale di eco fino a un livello leggibile dall'ADC. In questo step puoi anche partire con un guadagno fisso (senza TGC variabile nel tempo) — il TGC lo introduci quando inizi a lavorare a profondità maggiori o con target più attenuanti.
 
 ### ADC (Analog-to-Digital Converter)
-Campiona il segnale analogico amplificato trasformandolo in una sequenza di numeri che il microcontrollore può processare. Per questo step: minimo 10-12 bit, almeno 20-30 Msps.
+Campiona il segnale analogico amplificato trasformandolo in una sequenza di numeri che il microcontrollore può processare. Per questo step: minimo 10-12 bit, almeno 20-30 Msps. **⚠️ [?] Incoerenza segnalata in revisione (29/09/2026)**: l'ADC effettivamente scelto per il progetto è l'AD9280ARSZ, **8-bit**, non 10-12 bit come indicato qui. Con guadagno RX fisso ×11 e nessun TGC, un eco debole può occupare solo 1-2 LSB su uno span di 2V (LSB≈7,8mV) — margine di quantizzazione ridotto. Da misurare l'ampiezza reale dell'eco prima di decidere se serve più guadagno, un TGC minimo, o se 8-bit bastano comunque per gli obiettivi del progetto.
 
 ### Microcontrollore (RP2040)
 Coordina tutto: genera il segnale di trigger che fa partire pulser e finestra di campionamento in sincronia (via PIO, per timing preciso), raccoglie i dati dall'ADC, li trasferisce al PC via USB/seriale.
@@ -240,6 +240,27 @@ Time/div → partire largo (~20µs/div), poi restringere (~500ns/div) sulla zona
 
 ---
 
+## Procedura di misura del trasduttore (appena arriva) — aggiunta in revisione 29/09/2026
+
+*Diversi parametri del modello Butterworth-Van Dyke usato in simulazione (C3=20pF, C4=20fF) sono probabilmente irrealistici (vedi `simulazione_ltspice_handoff.md`) — vanno sostituiti con valori misurati sul trasduttore reale appena disponibile, prima di fidarsi ulteriormente del modello.*
+
+**Strumenti:** multimetro con modalità capacità, oscilloscopio FNIRSI DPOX180H con generatore integrato (uscita fissa 1Vpp, sorgente 50Ω), sonde ×10.
+
+### Misura della capacità statica C0
+1. Multimetro in modalità capacità direttamente sul connettore BNC, in aria. Sottrarre ~100pF/m di cavo.
+2. Cross-check a 100kHz: generatore → Rs≈500Ω → trasduttore; CH1 sul generatore, CH2 ai capi del trasduttore. Da V2/V1 = Xc/√(Rs²+Xc²) ricavi Xc e C = 1/(2π·f·Xc).
+
+### Curva di impedenza (per fs, fp, banda)
+1. Generatore → Rs=100Ω → trasduttore; CH1 lato generatore, CH2 ai capi del trasduttore.
+2. Spazzolare 2-8MHz a passi di 100kHz (o sweep del generatore se disponibile).
+3. Minimo di V2 = risonanza serie fs (impedenza minima). Massimo di V2 = antirisonanza parallela fp. |Z| ≈ Rs·V2/|V1-V2|, accurato solo vicino a picchi e minimi (ignora la fase).
+4. Ripetere in due condizioni: in aria, e con wear plate su gel appoggiato a una piastra/acqua — si osserva la banda allargarsi e il picco smorzarsi.
+5. Con C0, fs, fp e la banda, ricostruire il modello BVD reale per `Eco.asc`, sostituendo i valori stimati (C3=20pF, C4=20fF) attualmente non verificati.
+
+**Verifica aggiuntiva:** eco reale da una piastra attraverso parete PP + gel (ampiezza e tempo di recovery di U2 in Fase D) — collega questa misura al punto aperto del Passo 3 sopra (rischio saturazione).
+
+---
+
 ### Fase E — Passaggio al software (dati via microcontrollore)
 10. Ora che sai (con l'oscilloscopio) che il segnale analogico è corretto, colleghi l'uscita dell'amplificatore all'ADC
 11. Il firmware campiona e invia i dati al PC
@@ -265,6 +286,57 @@ Un sistema che, dato un singolo trasduttore fisso puntato verso un target in acq
 - Misura la distanza del target con un errore quantificato e accettabile rispetto al valore reale
 
 Questo risultato, da solo, è già un traguardo dimostrabile e "vero" (di fatto hai costruito un misuratore di distanza a ultrasuoni professionale, non un giocattolo) — e soprattutto è la base validata su cui costruire lo Step 2 (rotazione + scan conversion → prima immagine B-mode).
+
+---
+
+## Firmware — Timing PIO (dettaglio implementativo)
+
+*Analisi fatta su carta prima di scrivere il codice, per capire la struttura del programma PIO necessario a sincronizzare pulser e ADC con precisione a livello di ciclo di clock.*
+
+### Perché serve il PIO e non un firmware C/C++ generico
+Il tempo di volo misurato è nell'ordine delle decine-centinaia di microsecondi, con risoluzione spaziale voluta millimetrica:
+```
+Errore di tempo di 100ns → errore di distanza = (100×10⁻⁹ × 1480) / 2 ≈ 74µm
+Errore di tempo di 1µs → errore di distanza ≈ 740µm (quasi 1mm)
+```
+Un firmware C/C++ generico (interrupt, chiamate di funzione) ha tipicamente un jitter di centinaia di ns fino a qualche µs — troppo per questa risoluzione. Il PIO, hardware dedicato a un ciclo di clock fisso (125MHz base, 8ns/ciclo), elimina praticamente questo jitter.
+
+### Scoperta chiave dal datasheet AD9280: nessun pin di trigger/start conversion
+L'AD9280 è un ADC pipeline a **campionamento continuo**: un solo pin **CLK** controlla tutti i cicli di conversione interni, con **pipeline latency fissa di 3 cicli di clock** prima che il dato esca su D0-D7. Non si "spara" una singola conversione — il chip campiona sempre, a ogni fronte di clock. Questo significa che **il PIO deve anche generare il clock per l'ADC**, non solo sincronizzare il trigger del pulser.
+
+### Struttura — due PIO state machine
+
+**PIO SM#1 — Generatore di clock per l'ADC**
+```
+Vincoli datasheet: tCH, tCL ≥ 14,7ns ciascuno → periodo minimo ≈29,4ns → frequenza max ≈34MHz
+Target: 31,25MHz = 125MHz / 4 (divisore intero esatto del clock di sistema RP2040)
+```
+Onda quadra continua e libera (free-running) sul pin CLK dell'AD9280, sempre attiva indipendentemente dal trigger del pulser. **⚠️ [C] Correzione (29/09/2026)**: la versione precedente di questo documento proponeva 32MHz come target con necessità di riconfigurare il clock di sistema RP2040 a un multiplo "pulito" (es. 128MHz). Non è necessario: **125MHz/4 = 31,25MHz esatto**, un divisore intero del clock di sistema standard del RP2040, ben dentro lo spec (max ≈34MHz) e senza bisogno di toccare la configurazione del clock di sistema.
+
+**PIO SM#2 — Cattura dati sincronizzata**
+Legge gli 8 pin D0-D7 a ogni fronte di clock (rispettando **Data Valid Delay tOD = 25ns tipico** dopo il fronte), spinge i byte in FIFO da cui il **DMA** li trasferisce in RAM senza intervento CPU. Si attiva al trigger del pulser (T=0) e cattura per la finestra già dimensionata (**300µs ≈ 9.375 campioni a 31,25Msps**, valore corretto rispetto ai 9.600 calcolati in precedenza su 32MHz — vedi `step2-rotazione-bmode.md` Sez. 10.3, da aggiornare), poi si ferma fino al prossimo sparo.
+
+**⚠️ [?] Nota aperta aggiunta in revisione — interfaccia U2→ADC mai progettata**: in nessun file del progetto l'uscita di U2 (RX_OUT, bias stimato ≈6V) risulta effettivamente collegata all'ingresso AIN dell'AD9280 (AVDD 2,7-5,5V, span tipico 0-2V in configurazione Top/Bottom). Un collegamento diretto rischierebbe sovratensione sull'ingresso dell'ADC. Prima dell'assemblaggio del blocco RX→ADC serve progettare: accoppiamento AC dall'uscita di U2, ribias a centro span (~1V), clamp di protezione (Schottky) verso AVDD/GND dell'ADC, filtro anti-aliasing. Dettagli e valori indicativi (non ancora un progetto definitivo) in `revisione-progetto-29-09-2026.md`, Sez. 5.4.
+
+### Sequenza temporale integrata con gating già deciso
+```
+Pulser trigger (T=0) ──┐
+                        ├── PIO SM#1 (clock ADC): free-running continuo
+                        │
+                        └── PIO SM#2 + DMA: cattura per 300µs, poi stop
+```
+Il ritardo di pipeline dell'ADC (3 cicli ≈ 94ns) è trascurabile rispetto al margine di gating già deciso (3-5µs, vedi mitigazioni a costo zero sopra) — viene assorbito automaticamente, nessuna compensazione aggiuntiva necessaria.
+
+### Configurazione pin di supporto AD9280 (fissi, nessuna logica PIO richiesta)
+| Pin | Valore | Motivo |
+|---|---|---|
+| THREE-STATE | LOW | Un solo ADC sul bus dati, nessuna alta impedenza necessaria |
+| STBY | LOW | Mai in sleep — evita il wake-up di 400ns che complicherebbe la sincronizzazione |
+| MODE | AVDD | Top/Bottom mode, configurazione più semplice |
+| REFSENSE | GND | Span di ingresso 0-2V single-ended (Fig. 19 datasheet) — **da verificare** contro il bias reale d'uscita di U2 (R9/R10 del circuito RX) prima di finalizzare |
+
+### Punto tecnico — RISOLTO in revisione (29/09/2026)
+~~Il clock di sistema del RP2040 (125MHz) non divide in modo esattamente intero per ottenere 32MHz puliti~~ — risolto: **125MHz / 4 = 31,25MHz esatto**, divisore intero del clock di sistema standard, nessuna riconfigurazione necessaria. Il target di progetto è quindi 31,25MHz, non 32MHz — aggiornare di conseguenza anche il calcolo dei campioni per acquisizione (9.375 invece di 9.600, vedi sopra).
 
 ---
 

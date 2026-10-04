@@ -98,6 +98,12 @@ Non un film teso su un telaio, ma un **contenitore già pronto, rigido di suo** 
 
 **Compromesso accettato:** pareti più spesse (0,5-1mm) rispetto all'ideale teorico (pellicola, 0,01mm) → leggera perdita di segnale aggiuntiva, verificabile direttamente in Fase D del test Step 1 (ampiezza eco su oscilloscopio). Se insufficiente, possibile ottimizzazione futura: assottigliare localmente la parete (carta vetrata fine) solo nella fascia dove scorre la sonda — da valutare solo se necessario, non pianificato a priori.
 
+### 3.5 Note aggiuntive da revisione (29/09/2026)
+
+**Gap sagitta ridimensionato [C]:** la sonda piatta appoggiata su una parete curva (corda 20mm su raggio 90mm) lascia un piccolo spazio ai bordi del contatto, riempito di gel: `sagitta ≈ corda²/(8×raggio) ≈ 20²/(8×90) ≈ 0,55mm`. Una prima stima aveva descritto questo gap come problematico — **ridimensionato**: gel, PP sottile e acqua hanno impedenze/velocità acustiche simili tra loro, quindi il percorso resta acusticamente quasi trasparente attraverso quel gap. Resta solo una piccola aberrazione di fase ai bordi del fascio, non un problema di trasmissione. Il vero rischio pratico è l'eventuale presenza di bolle d'aria nel gel o una pressione di contatto non uniforme lungo la rotazione — non la geometria del gap in sé.
+
+**⚠️ [I] Verificare la forma reale del contenitore scelto:** le vaschette da gelato e contenitori simili in PP sono spesso **coniche, ovali o con nervature strutturali**, non perfettamente cilindriche Ø18cm come assunto nei calcoli di questa sezione. Nervature e variazioni di spessore peggiorano l'accoppiamento acustico in modo non uniforme lungo la rotazione. **Da fare prima di fissare il design meccanico dell'anello**: verificare fisicamente forma e planarità della parete del contenitore scelto.
+
 ---
 
 ## 4. Dimensionamento della vasca — diametro 18cm
@@ -296,7 +302,7 @@ Rotazione limitata a ±180° (step-and-shoot) → non serve slip ring. Basta un'
 3. **Finestra di campionamento — dimensionamento dettagliato:**
    - Distanza massima da coprire = diametro pieno vasca (caso peggiore: riverbero dalla parete opposta) = 18cm → tempo di volo andata/ritorno ≈ 243µs
    - Con margine di sicurezza: **finestra di campionamento consigliata ≈ 300µs**
-   - A 32Msps (max AD9280): **~9.600 campioni per linea**
+   - A **31,25Msps** (corretto in revisione 29/09/2026, vedi `step1_pulse_echo_singolo_elemento.md` — non più 32MHz nominale, bensì 125MHz/4 esatto): **≈9.375 campioni per linea** (non più 9.600)
    - A 8-bit: **~9,6KB per linea** — ampiamente gestibile nei 264KB SRAM del RP2040 (buffer singolo per linea, invio USB, poi linea successiva)
    - Trasferimento USB (~1-1,5MB/s realistico) ≈ 7-10ms/linea, trascurabile rispetto al settling meccanico — non è il collo di bottiglia
    - **Tempo totale stimato per scansione completa (200 acquisizioni) ≈ 6-12 secondi**
@@ -304,17 +310,36 @@ Rotazione limitata a ±180° (step-and-shoot) → non serve slip ring. Basta un'
 4. Trasferimento dati: ogni pacchetto USB seriale include angolo + campioni
 5. **Margine di gating post-sparo (nota da analisi link budget):** impostare la costante firmware di "inizio finestra valida" con margine abbondante — scartare i primi 3-5µs di ogni acquisizione, non il minimo teorico stretto. Motivo: oltre al breakthrough elettrico del T/R switch (già noto da simulazione), esiste anche un "main bang" acustico (riflessione alla prima interfaccia wear plate→gel, stimata -8,5dB) che può portare U2 vicino/dentro saturazione per un breve transitorio. Il margine di tempo disponibile prima dell'eco target resta comunque ampio anche nel caso peggiore (~58× la stima pessimistica del tempo di recovery, vedi analisi completa in cronologia di progetto) — il margine di gating è quindi precauzionale, a costo zero, non una correzione di un problema confermato
 6. **Nota operativa per i test (non firmware, ma disciplina di setup):** durante i test preliminari, evitare di centrare il target a meno di ~5cm dal bordo della vasca (il diametro 18cm lo permette comodamente) — coerente col margine di gating sopra
+7. **Timing PIO (generazione clock ADC + cattura sincronizzata):** dettaglio implementativo completo (due PIO state machine, configurazione pin AD9280, punto aperto sul clock di sistema) in `step1_pulse_echo_singolo_elemento.md`, sezione "Firmware — Timing PIO" — infrastruttura condivisa, usata identica in Step 2 ad ogni acquisizione della sequenza step-and-shoot
+8. **Lunghezza cavo BNC verso la sonda rotante:** con raggio anello 9cm e rotazione ±180°, margine minimo di cavo necessario ≈ π × 9cm ≈ 28cm oltre la distanza diretta sonda-circuito, lasciato come ansa morbida (vedi Sez. 8, gestione cavo BNC)
 
 ---
 
 ## 11. Software di ricostruzione
 
 1. Ogni linea A-mode = vettore ampiezze vs tempo(=profondità), con angolo noto
-2. **Scan conversion**: `x = profondità * cos(angolo)`, `y = profondità * sin(angolo)`
+2. **Scan conversion — ⚠️ [C] formula corretta in revisione (29/09/2026)**: con la sonda che ruota sulla parete esterna della vasca (non più al centro, come nel modello iniziale "a raggio zero"), l'origine delle coordinate deve essere il **centro della vasca**, non la posizione della sonda. Formula corretta: `r = R_vasca - (tempo × velocità_suono) / 2` (distanza dal centro, non dalla sonda), poi `x = r * cos(angolo)`, `y = r * sin(angolo)`. La versione precedente (`x = profondità * cos(angolo)`) assumeva implicitamente l'origine sulla sonda stessa — errore concettuale introdotto quando si è passati dal piano "sonda immersa a raggio zero" al piano attuale "sonda esterna sulla parete vasca", mai propagato a questa formula
 3. **Interpolazione**: `scipy.interpolate.griddata` per riempire i buchi tra linee discrete
 4. **Envelope detection + compressione logaritmica**: applicata per linea prima della scan conversion
 5. **Gating temporale**: finestra per escludere il riverbero della parete opposta della vasca (vedi Sez. 4.1, punto 2) dal segnale utile
 6. **Visualizzazione**: `matplotlib.pyplot.imshow`, Streamlit come miglioramento successivo
+7. **Ricostruzione coerente (backprojection/SAFT) — nota aggiunta in revisione**: la rotazione completa a 360° offre in teoria un'apertura sintetica "gratuita" (si vede lo stesso punto da più angoli). **Limite reale**: con fascio da 20mm (vedi Sez. 4bis sotto), un punto è illuminato da (quasi) tutti gli angoli solo entro **circa 10mm dal centro** della vasca — utile per un dito, solo parzialmente per un polso più grande. La versione **coerente** (somma di fase, non solo ampiezza) richiederebbe precisione geometrica meccanica ben sotto λ/2 (≈0,15mm), **incompatibile con una meccanica a stampa 3D + cinghia GT2**. Approccio consigliato per iniziare: **backprojection di inviluppo** (somma di ampiezze/inviluppo, non di fase) — molto più tollerante alle imprecisioni meccaniche reali, concettualmente la stessa famiglia tecnica del DAS descritto in `step4-fusione-multistatica.md` ma applicata qui a singolo elemento rotante invece che a più elementi fissi
+
+---
+
+## 4bis. Risoluzione: campionamento vs risoluzione laterale reale — chiarimento aggiunto in revisione
+
+*Punto importante non distinto chiaramente nelle versioni precedenti di questo documento.*
+
+I **2,8mm tra acquisizioni** calcolati in Sez. 5.3 sono la **risoluzione di campionamento spaziale** (quanto distano i punti campionati) — **non** la risoluzione laterale reale del sistema (quanto è piccolo un dettaglio effettivamente distinguibile). Sono due grandezze diverse.
+
+**Calcolo risoluzione laterale reale [C]:** cristallo Ø20mm, 5MHz, in acqua. Campo vicino:
+```
+N = D² / (4λ) = (20mm)² / (4×0,296mm) ≈ 338mm
+```
+L'intera vasca (18cm di diametro) sta **dentro** il campo vicino — il fascio non è mai focalizzato in nessun punto della vasca, resta largo circa quanto il cristallo stesso (~20mm). Questo significa che un dito (~15mm di diametro) viene visto come un'unica macchia indistinta ("blob"), non come una forma dettagliata, e i tendini (sub-mm) non sono risolti.
+
+**Conseguenza pratica:** il confronto con l'ecografia muscoloscheletrica clinica (già nel README/handoff come "riferimento onesto") va **ulteriormente ridimensionato** — le sonde cliniche lavorano a 10-18MHz con array focalizzati elettronicamente, una classe di risoluzione laterale non raggiungibile da questo sistema a elemento singolo non focalizzato. L'obiettivo realistico per la risoluzione laterale è dell'ordine della **larghezza del fascio (~20mm)**, non del millimetro.
 
 ---
 

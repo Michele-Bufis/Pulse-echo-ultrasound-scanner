@@ -23,7 +23,7 @@ Oscilloscopio FNIRSI DPOX180H (180MHz, 500MSa/s, 2 canali, generatore di funzion
 | Ricezione + trasduttore | Trasduttore NDT 5MHz 20mm YUSHI/XMSJ 5P20N (AliExpress, confermato, 55,69€), 1N4148 ×2, R4 1-2W, LM6172IN, cavo BNC extra, connettore BNC femmina, resistori/capacitori RX (incl. C6) | ~75-85€ |
 | Digitalizzazione + test | AD9280ARSZ, adattatore SSOP28→DIP28 (ancora da trovare), vasca, piastra target, calibro | ~35-40€ |
 
-**Totale Step 1: ~130-160€** (carrello TME confermato: ~84,70€ — dopo aggiunta batch componenti passivi; verificare disponibilità reale del 10kΩ segnalato a 0 stock prima di ordinare)
+**Totale Step 1: ~130-160€** — ⚠️ **non più definitivo dopo la revisione del 29/09/2026** (vedi `revisione-progetto-29-09-2026.md`): il carrello TME ~84,70€ include R2/R3 con valori ora superati (ricalcolati per 142V reali), possibile rimozione LM317+dissipatore, 4 componenti UC3843 mancanti da aggiungere, quantità nucleo trasformatore da verificare. Dettagli completi in `step1_componenti_priorita_tme.md`.
 
 ---
 
@@ -64,9 +64,16 @@ Valutati e messi da parte per budget durante la pianificazione (modulo boost HV 
 
 ---
 
-## Ordine di acquisto consigliato
+## Ordine di acquisto consigliato — AGGIORNATO dopo revisione 29/09/2026
 
-1. Completare gli acquisti Step 1 ancora aperti (🔴 in `step1_componenti_priorita_tme.md`) — un unico ordine TME consolidato + trasduttore AliExpress
-2. Assemblare e validare fisicamente lo Step 1 (il circuito è già validato in simulazione LTspice)
-3. Solo dopo Step 1 validato con hardware reale: ordinare componenti Step 2
-4. Step 3-4: da rivalutare in futuro come estensione, non nel piano attuale
+> ⚠️ Il circuito Step 1 **non è ancora pienamente validato** come affermato in precedenza — restano punti aperti su boost/RX da chiarire con una simulazione `.op`/`.ac` reale su `Eco.asc`. Vedi `revisione-progetto-29-09-2026.md` per il dettaglio completo.
+
+1. **Eseguire `.op` su `Eco.asc`** per chiarire il sospetto bug sul blocco RX (R6 senza condensatore in serie)
+2. **Ordinare per ora solo il trasduttore 5P20N** (55,69€) — il resto del carrello TME resta congelato, non finalizzare l'ordine
+3. Alla consegna del trasduttore: misurare capacità C0 e curva di impedenza reale, poi test eco su piastra attraverso parete PP+gel
+4. Aggiornare `Eco.asc` con i valori misurati, chiudere il vero loop di feedback boost (R2≈560kΩ, R3=10kΩ), ricostruire il modello BVD
+5. Calcolare/avvolgere il trasformatore con i nuovi valori, progettare l'interfaccia U2→ADC (ancora mancante), definire il clock PIO a 31,25MHz
+6. **Solo a quel punto** confermare e finalizzare l'ordine TME consolidato (componenti rimanenti + eventuali nuovi: resistori 270kΩ, RT/CT UC3843, rete compensazione, filtro current sense)
+7. Assemblare e validare fisicamente lo Step 1
+8. Solo dopo Step 1 validato con hardware reale: ordinare componenti Step 2
+9. Step 3-4: da rivalutare in futuro come estensione, non nel piano attuale

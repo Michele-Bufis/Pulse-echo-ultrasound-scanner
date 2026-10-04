@@ -3,7 +3,9 @@
 ## Obiettivo
 Costruire in casa un sistema di imaging a ultrasuoni che produca un'**immagine 2D reale** (B-mode, non solo segnali A-mode), partendo da esperienza pregressa in ECG DIY. Obiettivo finale: imaging su fantocci tissue-mimicking e su target biologici semplici (dito/polso in acqua), per portfolio tecnico da mostrare ad aziende del settore biomedicale.
 
-**Chiarimento importante — completezza vs qualità:** con rotazione a 360° (non un ventaglio parziale) lo Step 2 produce concettualmente una **"fetta" 2D completa dell'oggetto**, strutturalmente paragonabile a una sezione TAC/RM (vista completa a giro d'orizzonte, non solo un lato parziale come un'ecografia clinica classica). Quello che resta diverso da TAC/RM è il **dettaglio interno**: contorni netti solo dove c'è forte differenza di impedenza acustica (pelle, osso), zone di tessuto omogeneo restano "grigie e granulose" (speckle), ombre acustiche dietro l'osso restano buchi nella fetta. La rotazione risolve la *forma* del risultato (sezione completa), non la *ricchezza di dettaglio* al suo interno.
+**Chiarimento importante — completezza vs qualità:** con rotazione a 360° (non un ventaglio parziale) lo Step 2 produce concettualmente una **"fetta" 2D completa dell'oggetto** (vista completa a giro d'orizzonte, non solo un lato parziale come un'ecografia clinica classica). La rotazione risolve la *forma* del risultato (copertura angolare completa), non la *ricchezza di dettaglio* al suo interno.
+
+> ⚠️ **Correzione in revisione (29/09/2026)**: il confronto con una sezione TAC/RM nella frase precedente era eccessivo e va ridimensionato ulteriormente. **[C] Calcolo campo vicino**: cristallo Ø20mm a 5MHz in acqua → `N = D²/(4λ) ≈ 338mm` — l'intera vasca (18cm) sta dentro il campo vicino, quindi il fascio non è mai focalizzato e resta largo quanto il cristallo (~20mm) in ogni punto della vasca. Questo significa che la **risoluzione laterale realistica è dell'ordine di ~20mm**, non del millimetro: un dito (~15mm) viene visto come una macchia indistinta, i tendini (sub-mm) non sono risolvibili. Il riferimento "ecografia muscoloscheletrica clinica" (sonde 10-18MHz con array focalizzati) resta valido come termine di paragone per spiegare *cosa* si sta cercando di fare, ma va chiarito che la qualità raggiungibile da questo sistema a elemento singolo non focalizzato è molto più lontana da quel riferimento di quanto suggerisse la formulazione precedente. Dettagli completi in `step2-rotazione-bmode.md`, Sez. 4bis.
 
 **Nota sulla configurazione fisica reale (Step 2):** a differenza dell'idea concettuale iniziale (anello di trasduttori immerso in vasca), la configurazione finale scelta ha il trasduttore **esterno** alla vasca, che scorre sulla parete esterna con gel accoppiante — il target (dito/polso) resta immerso, la sonda no. Motivo: il trasduttore scelto (5P20N, contact-type) non è impermeabile. Dettagli completi, alternative valutate e calcoli in `step2-rotazione-bmode.md`, Sezione 2.
 
@@ -18,13 +20,13 @@ L'idea a 4 elementi rotanti (Approccio C, esplorata e poi accantonata) resta val
 
 ## Roadmap incrementale consigliata (NON partire dal sistema completo)
 1. **Step 1** (in corso, lista componenti definita): 1 solo elemento, pulse-echo statico → valida hardware/firmware base (A-mode)
-2. **Step 2** (prossimo): 1 elemento + rotazione meccanica → B-mode a scansione meccanica pura (scan conversion semplice) — **questo è ora l'obiettivo finale del piano attuale**
+2. **Step 2** (prossimo): 1 elemento + rotazione meccanica → B-mode a scansione meccanica pura (scan conversion semplice, con **backprojection di inviluppo** per sfruttare la ridondanza della rotazione a 360° — aggiunto in revisione 29/09/2026, dettagli in `step2-rotazione-bmode.md` Sez. 11 punto 7) — **questo è ora l'obiettivo finale del piano attuale**
 3. ~~Step 3-4 (4 elementi + switching matrix + eventuale fusione multistatica)~~ — accantonati per budget, possibile stretch goal futuro
 
 ## Blocchi hardware necessari (Approccio A — singolo elemento)
 - **Trasduttore piezoelettrico** (1×, singolo elemento — scelto 5MHz, priorità data all'uso finale su dito/polso, funziona bene anche per i test su fantoccio/target in acqua dello Step 1)
 - **Pulser** (generatore impulsi HV, 100-300V, breve durata) — MOSFET HV (STP8NK100Z) + gate driver (MC33151PG), capacitore storage (WIMA FKP1)
-- **Boost HV autocostruito** (12V→100-300V, troppo caro il modulo pronto XP Power ~150-200€): UC3843BN + trasformatore custom (nucleo E20/10/6-3C94 + coil former EF20-K-H-8P, filo di rame recuperato) + MOSFET dedicato boost (basse tensioni, ancora da scegliere) + capacitore filtro elettrolitico HV (ancora da scegliere) + resistenza current sense (ancora da scegliere)
+- **Boost HV autocostruito** (12V→100-300V, troppo caro il modulo pronto XP Power ~150-200€): UC3843BN + trasformatore custom (nucleo E20/10/6-3C94, quantità da verificare — servono 2 metà, non 1 + coil former EF20-K-H-8P, filo di rame recuperato) + MOSFET dedicato boost + capacitore filtro elettrolitico HV + resistenza current sense + **⚠️ [V] BOM ancora incompleta (trovato in revisione 29/09/2026)**: mancano i componenti di supporto standard dell'UC3843BN (RT/CT per la frequenza, rete di compensazione sul pin COMP, filtro RC sul current sense) — sostituiti in simulazione da blocchi ideali, mai aggiunti alla lista acquisti fisici (dettagli in `step1_componenti_priorita_tme.md`)
 - **T/R switch** (diodi incrociati 1N4148 + resistenza limitatrice, ancora da scegliere il valore)
 - ~~Switching matrix~~ — non più necessaria (approccio a singolo elemento)
 - **Amplificatore RX**: LM6172IN (THT, DIP-8, ~100MHz banda passante, nessun TGC nello Step 1, guadagno fisso)
@@ -69,6 +71,22 @@ Nota: AVR (Arduino classico) scartato — RP2040 scelto per le PIO state machine
 - **Risoluzione assiale**: dipende da durata impulso (frequenza trasduttore) — non dalla copertura angolare.
 - **Risoluzione laterale**: dipende da dimensione elemento/focalizzazione del fascio.
 - Target di test consigliati: fantocci tissue-mimicking (gelatina + cellulosa, con inclusioni per generare echi interni) e successivamente dito/polso in acqua (buona eterogeneità: pelle, tessuti molli, tendini, osso con ombra acustica — risultato visivamente riconoscibile e paragonabile a ecografia muscoloscheletrica reale). **Trasduttore scelto: 5MHz** (priorità data all'uso finale su dito/polso; funziona bene anche sui target Step 1 a distanze brevi 5-15cm).
+
+## Prerequisiti tecnici Step 2 — ⚠️ aggiornato dopo revisione 29/09/2026, non tutto era davvero chiuso
+
+Una precedente versione di questa nota dichiarava chiusi tutti i prerequisiti tecnici tranne il partitore LM317. Una revisione approfondita (`revisione-progetto-29-09-2026.md`) ha trovato diversi problemi non ancora verificati, che riaprono parte di questa lista:
+
+**Effettivamente chiuso:** timing PIO (corretto: 31,25MHz = 125MHz/4 esatto, non 32MHz), lunghezza cavo BNC per rotazione, LM317 (risolto: non necessario, l'AD9280 accetta 2,7-5,5V, si può usare il rail 3,3V ATX diretto — confermato sul datasheet reale).
+
+**Riaperto dalla revisione:**
+- Link budget e saturazione RX: la conclusione "rischio trascurabile" resta condizionata a una misura empirica in Fase D (mai stata una certezza assoluta, ma va ribadito)
+- Bilancio di potenza: la cifra andava ricalcolata dopo la rimozione del LM317
+- **Nuovo problema trovato**: il partitore di feedback del boost (R2/R3) non era mai stato dimensionato per dare realmente 142V una volta chiuso il loop — il valore osservato in simulazione era un duty cycle fisso, non una regolazione funzionante. Ricalcolato: R2≈560kΩ, R3=10kΩ (era 10kΩ/1kΩ)
+- **Nuovo problema trovato**: possibile bug sul guadagno RX (R6 senza condensatore in serie) — non verificato con un `.op` reale su `Eco.asc`, da chiarire prima di procedere
+- **BOM incompleta**: mancano componenti di supporto standard per l'UC3843BN (RT/CT, rete di compensazione, filtro current sense) — sostituiti in simulazione da blocchi ideali, mai aggiunti alla lista acquisti fisici
+- **Interfaccia U2→ADC mai progettata**: nessun file collega esplicitamente l'uscita RX (bias ≈6V) all'ingresso dell'AD9280 (span atteso 0-2V) — serve un progetto di accoppiamento AC + ribias + clamp
+
+Dettagli completi, calcoli, e ordine di lavoro concordato in `revisione-progetto-29-09-2026.md`.
 
 ## Prossimi passi pratici da affrontare nella prossima sessione
 1. Chiudere gli ultimi elementi 🔴 rimasti della checklist componenti Step 1 (vedi file separato: MOSFET boost, capacitore filtro boost, resistenza current sense, resistenza T/R switch, connettore BNC femmina, cavo USB Pico, ordine trasduttore su AliExpress, vasca/piastra target/calibro)

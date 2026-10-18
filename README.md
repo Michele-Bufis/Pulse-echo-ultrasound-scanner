@@ -5,6 +5,19 @@
 
 # Sistema di Imaging a Ultrasuoni DIY — Pulse-Echo B-mode
 
+<div align="center">
+  
+  <!-- Video in riproduzione automatica -->
+  <video src="LINK_DIRETTO_AL_FILE.mp4" width="700" autoplay loop muted playsinline></video>
+  
+  <br><br>
+  
+  <!-- Pulsante in stile GitHub per aprire la simulazione interattiva su GitHub Pages -->
+  <a href="https://michele-bufis.github.io/Pulse-echo-ultrasound-scanner/progetto-ultrasuoni-anatomy.html">
+    <img src="https://img.shields.io/badge/▶_PROVA_LA_SIMULAZIONE_INTERATTIVA-0b0b0b?style=for-the-badge&logoColor=white" alt="Prova simulazione">
+  </a>
+</div>
+
 Obiettivo: produrre un'immagine B-mode reale (non solo segnali A-mode) su fantocci tissue-mimicking e target biologici semplici (dito/polso in acqua), documentando l'intero processo ingegneristico per portfolio tecnico.
 
 ## Stato del progetto

@@ -1,6 +1,11 @@
+> [!NOTE]
+> **Personal Project**
+> 
+> This repository contains an independent, self-directed learning initiative. It is not affiliated with any university coursework, academic research, or corporate entity.
+
 # Sistema di Imaging a Ultrasuoni DIY — Pulse-Echo B-mode
 
-Progetto hobbistico per costruire in casa un sistema di imaging a ultrasuoni pulse-echo, partendo da esperienza pregressa in ECG DIY. Obiettivo: produrre un'immagine B-mode reale (non solo segnali A-mode) su fantocci tissue-mimicking e target biologici semplici (dito/polso in acqua), documentando l'intero processo ingegneristico per portfolio tecnico.
+Obiettivo: produrre un'immagine B-mode reale (non solo segnali A-mode) su fantocci tissue-mimicking e target biologici semplici (dito/polso in acqua), documentando l'intero processo ingegneristico per portfolio tecnico.
 
 ## Stato del progetto
 

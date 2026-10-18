@@ -1,0 +1,1620 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banco Pulse-Echo a Ultrasuoni</title>
+<style id="anatomy-css"></style>
+<style>
+/* PAGE_CSS, as in kit/iso-kit.mjs (the width is the card width in px) */
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body[data-theme="light"]{color-scheme:light}
+body{margin:0;background:var(--anatomy-page);color:var(--anatomy-text);font:14px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.iso-page{width:min(680px,100% - 32px);margin:64px auto 96px}
+/* the small theme switch, top right */
+.anatomy-theme{position:fixed;top:12px;right:12px;z-index:5;display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--anatomy-lo);border-radius:50%;background:var(--anatomy-card);color:var(--anatomy-mid);cursor:pointer;opacity:.7;transition:opacity .2s,color .2s}
+.anatomy-theme:hover,.anatomy-theme:focus-visible{opacity:1;color:var(--anatomy-strong)}
+
+/* Layout con barra di controllo verticale a sinistra */
+.iso-stage-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+.iso-scrubber {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 38px;
+  padding: 10px 0;
+  border: 1px solid var(--anatomy-faint);
+  background: var(--anatomy-page);
+  user-select: none;
+  touch-action: none;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  transition: border-color .2s;
+  z-index: 4;
+}
+.iso-scrubber:hover,
+.iso-scrubber:focus-visible {
+  border-color: var(--anatomy-mid);
+  outline: none;
+}
+.iso-scrubber-label {
+  font-family: var(--anatomy-mono);
+  font-size: 9px;
+  color: var(--anatomy-muted);
+  letter-spacing: .02em;
+  line-height: 1.15;
+  text-align: center;
+}
+.iso-scrubber-track {
+  position: relative;
+  flex: 1;
+  width: 4px;
+  margin: 10px 0;
+  background: var(--anatomy-faint);
+  border-radius: 2px;
+}
+.iso-scrubber-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  background: var(--anatomy-mid);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.iso-scrubber-thumb {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 20px;
+  height: 9px;
+  background: var(--anatomy-lit);
+  border: 1px solid var(--anatomy-page);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 3px rgba(0,0,0,.5);
+  pointer-events: none;
+  transition: transform .1s;
+}
+.iso-scrubber:hover .iso-scrubber-thumb,
+.iso-scrubber:focus-visible .iso-scrubber-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+.iso-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  outline: none;
+}
+
+/* Pulsante rapido per aprire l'ecografia B-mode */
+.bmode-trigger {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 4px 9px;
+  border: 1px solid var(--anatomy-lo);
+  background: var(--anatomy-page);
+  color: var(--anatomy-text);
+  font-family: var(--anatomy-mono);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity .2s, border-color .2s, color .2s;
+}
+.bmode-trigger:hover {
+  opacity: 1;
+  border-color: var(--anatomy-hi);
+  color: var(--anatomy-strong);
+}
+
+/* Modal in primo piano con il fac-simile eco layer (B-mode) */
+.bmode-overlay {
+  position: absolute;
+  inset: -12px 0 -12px 54px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.78);
+  backdrop-filter: blur(5px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s var(--anatomy-ease);
+}
+body[data-theme="light"] .bmode-overlay {
+  background: rgba(242, 242, 239, 0.82);
+}
+.bmode-overlay[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bmode-card {
+  width: min(440px, 96%);
+  background: var(--anatomy-card);
+  border: 1px solid var(--anatomy-hi);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+  padding: 14px 16px 16px;
+  transform: translateY(8px) scale(0.97);
+  transition: transform .35s var(--anatomy-ease);
+}
+.bmode-overlay[data-open="true"] .bmode-card {
+  transform: translateY(0) scale(1);
+}
+.bmode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--anatomy-faint);
+  font-family: var(--anatomy-mono);
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--anatomy-strong);
+}
+.bmode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bmode-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--anatomy-green);
+  box-shadow: 0 0 6px var(--anatomy-green);
+}
+.bmode-close {
+  background: var(--anatomy-page);
+  border: 1px solid var(--anatomy-lo);
+  color: var(--anatomy-text);
+  font-family: var(--anatomy-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.bmode-close:hover {
+  border-color: var(--anatomy-hi);
+  color: var(--anatomy-strong);
+}
+.bmode-screen {
+  position: relative;
+  background: #050709;
+  border: 1px solid var(--anatomy-lo);
+  aspect-ratio: 4 / 3.1;
+  overflow: hidden;
+}
+.bmode-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.bmode-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: var(--anatomy-mono);
+  font-size: 10px;
+  color: var(--anatomy-muted);
+}
+
+@media (max-width: 560px) {
+  .iso-stage-wrap { gap: 8px; }
+  .iso-scrubber { width: 30px; }
+  .bmode-overlay { inset: -8px 0 -8px 38px; }
+}
+</style>
+</head>
+<body class="iso" data-theme="dark">
+<button class="anatomy-theme" type="button" aria-label="Cambia tema chiaro/scuro" aria-pressed="false"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg></button>
+<main class="iso-page" id="app"></main>
+<script type="module">
+/* ── 1. KIT ──────────────────────────────────────────────────────────────── */
+
+const k = (() => {
+const AZIMUTH = 45;
+const ELEVATION = 30;
+const SHADES = 4;
+const RADIANS = Math.PI / 180;
+const UNIT = Math.sqrt(1.6);
+function cameraOf({ scale, azimuth = AZIMUTH, elevation = ELEVATION }) {
+    const a = azimuth * RADIANS;
+    const e = elevation * RADIANS;
+    return { sinA: Math.sin(a), cosA: Math.cos(a), sinE: Math.sin(e), cosE: Math.cos(e), k: scale * UNIT };
+}
+function iso([x, y, z], projection) {
+    const { origin } = projection;
+    const { sinA, cosA, sinE, cosE, k } = cameraOf(projection);
+    return [origin[0] + (x * sinA - y * cosA) * k, origin[1] + ((x * cosA + y * sinA) * sinE - z * cosE) * k];
+}
+function towardViewer(projection) {
+    const { sinA, cosA } = cameraOf(projection);
+    return [cosA, sinA];
+}
+function depthOf([x, y, z], projection) {
+    const { sinA, cosA, sinE, cosE } = cameraOf(projection);
+    return (x * cosA + y * sinA) * cosE + z * sinE;
+}
+const tenth = (value) => {
+    const text = (Math.round(value * 10) / 10).toFixed(1).replace(/\.0$/, "");
+    return text === "-0" ? "0" : text;
+};
+function pathOf(points, closed = false) {
+    if (!points.length)
+        return "";
+    return points.map(([x, y], at) => `${at ? "L" : "M"}${tenth(x)} ${tenth(y)}`).join("") + (closed ? "Z" : "");
+}
+const joinPaths = (paths) => paths.filter(Boolean).join("");
+function roundedPlan({ x, y, w, d, r }, steps = 8) {
+    const radius = Math.max(0, Math.min(r, w / 2, d / 2));
+    const corners = [
+        [x + w - radius, y + radius, -90],
+        [x + w - radius, y + d - radius, 0],
+        [x + radius, y + d - radius, 90],
+        [x + radius, y + radius, 180],
+    ];
+    const out = [];
+    for (const [cx, cy, start] of corners) {
+        const count = radius > 0 ? steps : 0;
+        for (let step = 0; step <= count; step++) {
+            const angle = (start + (count ? (90 * step) / count : 45)) * RADIANS;
+            out.push([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)]);
+        }
+    }
+    return out;
+}
+function signedArea(points) {
+    let area = 0;
+    for (let index = 0; index < points.length; index++) {
+        const [ax, ay] = points[index];
+        const [bx, by] = points[(index + 1) % points.length];
+        area += ax * by - bx * ay;
+    }
+    return area / 2;
+}
+const oriented = (points) => (signedArea(points) < 0 ? [...points].reverse() : points);
+function convexHull(points) {
+    const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (sorted.length < 3)
+        return sorted;
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lower = [];
+    for (const point of sorted) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0)
+            lower.pop();
+        lower.push(point);
+    }
+    const upper = [];
+    for (let index = sorted.length - 1; index >= 0; index--) {
+        const point = sorted[index];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0)
+            upper.pop();
+        upper.push(point);
+    }
+    return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+function runsOf(flags, want) {
+    const count = flags.length;
+    const runs = [];
+    const start = flags.findIndex((flag, index) => flag !== flags[(index + count - 1) % count]);
+    if (start < 0)
+        return flags[0] === want ? [Array.from({ length: count + 1 }, (_, index) => index % count)] : [];
+    let run = null;
+    for (let step = 0; step < count; step++) {
+        const index = (start + step) % count;
+        if (flags[index] === want) {
+            if (!run)
+                run = [index];
+            run.push((index + 1) % count);
+        }
+        else if (run) {
+            runs.push(run);
+            run = null;
+        }
+    }
+    if (run)
+        runs.push(run);
+    return runs;
+}
+function extrude(ring, z, height, projection, options = {}) {
+    const convex = options.convex ?? true;
+    const count = ring.length;
+    const counter = signedArea(ring) > 0;
+    const [vx, vy] = towardViewer(projection);
+    const { sinA, cosA } = cameraOf(projection);
+    const normals = ring.map(([ax, ay], index) => {
+        const [bx, by] = ring[(index + 1) % count];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const length = Math.hypot(dx, dy) || 1;
+        return (counter ? [dy / length, -dx / length] : [-dy / length, dx / length]);
+    });
+    const facing = normals.map(([nx, ny]) => nx * vx + ny * vy > 1e-9);
+    const top = ring.map(([x, y]) => iso([x, y, z + height], projection));
+    const bottom = ring.map(([x, y]) => iso([x, y, z], projection));
+    const outline = [];
+    const crease = [];
+    for (const run of runsOf(facing, false))
+        outline.push(pathOf(run.map((index) => top[index])));
+    for (const run of runsOf(facing, true)) {
+        crease.push(pathOf(run.map((index) => top[index])));
+        if (height > 0)
+            outline.push(pathOf(run.map((index) => bottom[index])));
+    }
+    if (height > 0) {
+        for (let index = 0; index < count; index++) {
+            if (facing[(index + count - 1) % count] !== facing[index])
+                outline.push(pathOf([top[index], bottom[index]]));
+        }
+    }
+    let fill;
+    if (convex) {
+        fill = pathOf(convexHull([...top, ...bottom]), true);
+    }
+    else {
+        const parts = [pathOf(oriented(top), true), pathOf(oriented(bottom), true)];
+        for (let index = 0; index < count; index++) {
+            if (!facing[index])
+                continue;
+            const next = (index + 1) % count;
+            parts.push(pathOf(oriented([top[index], top[next], bottom[next], bottom[index]]), true));
+        }
+        fill = parts.join("");
+    }
+    const buckets = Array.from({ length: SHADES }, () => []);
+    if (height > 0) {
+        const [lx, ly] = [-sinA, cosA];
+        for (let index = 0; index < count; index++) {
+            if (!facing[index])
+                continue;
+            const [nx, ny] = normals[index];
+            const lit = (nx * lx + ny * ly + 1) / 2;
+            const shade = Math.min(SHADES - 1, Math.max(0, Math.floor(lit * SHADES)));
+            const next = (index + 1) % count;
+            buckets[shade].push(pathOf(oriented([top[index], top[next], bottom[next], bottom[index]]), true));
+        }
+    }
+    let bevel;
+    if (options.bevel && options.bevel > 0) {
+        const by = options.bevel;
+        const inset = ring.map(([x, y], index) => {
+            const [ax, ay] = normals[(index + count - 1) % count];
+            const [bx, by2] = normals[index];
+            const mx = ax + bx;
+            const my = ay + by2;
+            const length = Math.hypot(mx, my) || 1;
+            return [x - (mx / length) * by, y - (my / length) * by];
+        });
+        const insetTop = inset.map(([x, y]) => iso([x, y, z + height], projection));
+        bevel = runsOf(facing, true)
+            .map((run) => pathOf([top[run[0]], ...run.slice(1, -1).map((index) => insetTop[index]), top[run[run.length - 1]]]))
+            .join("");
+    }
+    return {
+        fill,
+        outline: outline.join(""),
+        crease: crease.join(""),
+        top: pathOf(oriented(top), true),
+        shades: buckets.map((paths) => paths.join("")),
+        bevel,
+    };
+}
+const ringOf = (plan, steps = 8) => roundedPlan(plan, steps);
+function slabOf(plan, z, height, projection, steps = 8, bevel = 0) {
+    return extrude(ringOf(plan, steps), z, height, projection, { convex: true, bevel });
+}
+function circleRing(cx, cy, radius, steps = 40) {
+    return Array.from({ length: steps }, (_, step) => {
+        const angle = (step / steps) * Math.PI * 2;
+        return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+    });
+}
+function cylinder(cx, cy, radius, z, height, projection, steps = 32, bevel = 0) {
+    return extrude(circleRing(cx, cy, radius, steps), z, height, projection, { convex: true, bevel });
+}
+const insetPlan = ({ x, y, w, d, r }, by) => ({ x: x + by, y: y + by, w: w - by * 2, d: d - by * 2, r: Math.max(0, r - by) });
+function onTop(points, z, projection, closed = false) {
+    return pathOf(points.map(([x, y]) => iso([x, y, z], projection)), closed);
+}
+const planOutline = (plan, z, projection, steps = 8) => onTop(ringOf(plan, steps), z, projection, true);
+const lineOnTop = (from, to, z, projection) => onTop([from, to], z, projection);
+const segment = (from, to, projection) => pathOf([iso(from, projection), iso(to, projection)]);
+const rise = (at, from, to, projection) => segment([at[0], at[1], from], [at[0], at[1], to], projection);
+const ring = (cx, cy, radius, z, projection, steps = 40) => onTop(circleRing(cx, cy, radius, steps), z, projection, true);
+const pointsAt = (points, projection) => points.map((point) => iso(point, projection));
+function dotGrid(x, y, columns, rows, gap, z, projection) {
+    const dots = [];
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++)
+            dots.push(iso([x + column * gap, y + row * gap, z], projection));
+    }
+    return dots;
+}
+function corners({ x, y, w, d }, inset = 0) {
+    return [
+        [x + inset, y + inset],
+        [x + w - inset, y + inset],
+        [x + inset, y + d - inset],
+        [x + w - inset, y + d - inset],
+    ];
+}
+function boxCorners({ x, y, w, d }, z0, z1) {
+    const out = [];
+    for (const px of [x, x + w])
+        for (const py of [y, y + d])
+            for (const z of [z0, z1])
+                out.push([px, py, z]);
+    return out;
+}
+function knurl(cx, cy, radius, z0, z1, count, projection, inset = 0.4) {
+    const [vx, vy] = towardViewer(projection);
+    const lines = [];
+    for (let index = 0; index < count; index++) {
+        const angle = (index / count) * Math.PI * 2;
+        const nx = Math.cos(angle);
+        const ny = Math.sin(angle);
+        if (nx * vx + ny * vy < 0.15)
+            continue;
+        lines.push(segment([cx + radius * nx, cy + radius * ny, z0 + inset], [cx + radius * nx, cy + radius * ny, z1 - inset], projection));
+    }
+    return lines.join("");
+}
+function sideArc(cx, cy, radius, z, projection, steps = 24) {
+    const [vx, vy] = towardViewer(projection);
+    const facing = Math.atan2(vy, vx);
+    const points = [];
+    for (let step = 0; step <= steps; step++) {
+        const angle = facing - Math.PI / 2 + (step / steps) * Math.PI;
+        points.push(iso([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle), z], projection));
+    }
+    return pathOf(points);
+}
+function topTicks(from, to, step, every, edge, z, lengths, projection, axis = "x") {
+    const minor = [];
+    const major = [];
+    const first = Math.ceil(from / step) * step;
+    for (let at = first, index = Math.round(first / step); at <= to + 1e-9; at += step, index++) {
+        const big = index % every === 0;
+        const length = big ? lengths[1] : lengths[0];
+        const a = axis === "x" ? [at, edge] : [edge, at];
+        const b = axis === "x" ? [at, edge + length] : [edge + length, at];
+        (big ? major : minor).push(lineOnTop(a, b, z, projection));
+    }
+    return { minor: minor.join(""), major: major.join("") };
+}
+const haloOf = (plan, z, height, projection) => slabOf(plan, z, height, projection).fill;
+function fitProjection(points, width, height, { pad = 24, headroom = 0, azimuth = AZIMUTH, elevation = ELEVATION } = {}) {
+    const unit = { origin: [0, 0], scale: 1, azimuth, elevation };
+    const flat = points.map((point) => iso(point, unit));
+    const xs = flat.map(([x]) => x);
+    const ys = flat.map(([, y]) => y);
+    const left = Math.min(...xs);
+    const right = Math.max(...xs);
+    const up = Math.min(...ys);
+    const down = Math.max(...ys);
+    const scale = Math.min((width - pad * 2) / (right - left), (height - pad * 2 - headroom) / (down - up));
+    return {
+        origin: [width / 2 - ((left + right) / 2) * scale, headroom + (height - headroom) / 2 - ((up + down) / 2) * scale],
+        scale,
+        azimuth,
+        elevation,
+    };
+}
+const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const attrs = (pairs) => Object.entries(pairs)
+    .filter(([, value]) => value !== undefined && value !== false)
+    .map(([key, value]) => ` ${key}="${escape(String(value))}"`)
+    .join("");
+function solidSvg(paths, { tone = "hi", crease = "faint", halo = false, lit = false, flat = false, className, inner = "" } = {}) {
+    const parts = [];
+    if (halo)
+        parts.push(`<path class="iso-halo" d="${paths.fill}"/>`);
+    parts.push(`<path class="iso-fill" d="${paths.fill}"/>`);
+    if (!flat) {
+        paths.shades.forEach((d, shade) => {
+            if (d)
+                parts.push(`<path class="iso-shade" data-shade="${shade}" d="${d}"/>`);
+        });
+        parts.push(`<path class="iso-top" d="${paths.top}"/>`);
+    }
+    if (crease !== "none" && paths.crease)
+        parts.push(`<path class="iso-line iso-crease" data-tone="${crease}" d="${paths.crease}"/>`);
+    if (crease !== "none" && paths.bevel)
+        parts.push(`<path class="iso-line iso-bevel" data-tone="${crease}" d="${paths.bevel}"/>`);
+    if (inner)
+        parts.push(inner);
+    parts.push(`<path class="iso-line iso-edge" data-tone="${tone}" d="${paths.outline}"/>`);
+    return `<g${attrs({ class: className ? `iso-solid ${className}` : "iso-solid", "data-lit": lit ? "" : undefined, "data-seamless": paths.seamless ? "" : undefined })}>${parts.join("")}</g>`;
+}
+function lineSvg(d, { tone = "lo", dotted = false, dashed = false, flow = false, className, free } = {}) {
+    if (!d)
+        return "";
+    return `<path${attrs({
+        class: className ? `iso-line ${className}` : "iso-line",
+        "data-tone": tone,
+        "data-free": free === true ? "" : free || undefined,
+        "data-dotted": dotted ? "" : undefined,
+        "data-dashed": dashed ? "" : undefined,
+        "data-flow": flow ? "" : undefined,
+        d,
+    })}/>`;
+}
+function dotsSvg(points, { size = 0.5, tone = "mid", pulse = false } = {}) {
+    const dots = points
+        .map(([x, y, alpha], index) => `<circle cx="${tenth(x)}" cy="${tenth(y)}" r="${size}"${alpha !== undefined && alpha < 1 ? ` fill-opacity="${Math.max(0, alpha).toFixed(2)}"` : ""}${pulse ? ` data-pulse="" style="--pulse-at:${(index * 137) % 1600}ms"` : ""}/>`)
+        .join("");
+    return `<g class="iso-dots" data-tone="${tone}">${dots}</g>`;
+}
+function wireSvg(from, to, { via = [], tone = "lo", dotted = false, dashed = false, flow = false, ends = "both", size = 1.2 } = {}) {
+    const d = pathOf([from, ...via, to]);
+    const end = ([x, y]) => `<circle class="iso-wire-end" cx="${tenth(x)}" cy="${tenth(y)}" r="${size}"/>`;
+    return `<g class="iso-wire" data-tone="${tone}">${lineSvg(d, { tone, dotted, dashed, flow })}${ends === "both" || ends === "from" ? end(from) : ""}${ends === "both" || ends === "to" ? end(to) : ""}</g>`;
+}
+function figureSvg({ width, height, label, body, standalone = false, className }) {
+    const style = standalone ? `<style>${ISO_CSS}</style>` : "";
+    return `<svg${attrs({
+        xmlns: "http://www.w3.org/2000/svg",
+        class: `iso-svg${standalone ? " iso" : ""}${className ? ` ${className}` : ""}`,
+        "data-theme": standalone || undefined,
+        viewBox: `0 0 ${width} ${height}`,
+        role: "img",
+        "aria-label": label,
+    })}>${style}${Array.isArray(body) ? body.join("") : body}</svg>`;
+}
+function swatchSvg(mark) {
+    if (mark === "raised" || mark === "flat" || mark === "lit") {
+        const body = mark === "flat" ? "M2 6.5 8 3.5 14 6.5 8 9.5Z" : "M2 4.5 8 1.5 14 4.5 14 6 8 9 2 6Z";
+        const crease = mark === "flat" ? "" : `<path class="iso-swatch-crease" d="M2 4.5 8 7.5 14 4.5"/>`;
+        return `<svg class="iso-swatch" data-mark="${mark}" viewBox="0 0 16 10" aria-hidden="true"><path d="${body}"/>${crease}</svg>`;
+    }
+    return `<svg class="iso-swatch" data-mark="${mark}" viewBox="0 0 16 10" aria-hidden="true"><path d="M1.5 5h13"/></svg>`;
+}
+function plateHtml({ fig, title, hint, readout = "", keys = [], caption, body }) {
+    const corner = (name, text, extra = "") => `<span class="iso-plate-corner" data-corner="${name}"${extra}>${escape(text)}</span>`;
+    const legend = keys.length || caption
+        ? `<figcaption class="iso-legend">${keys.length ? `<span class="iso-keys">${keys.map((key) => `<span class="iso-key">${swatchSvg(key.mark)}${escape(key.label)}</span>`).join("")}</span>` : ""}${caption ? `<span class="iso-caption">${escape(caption)}</span>` : ""}</figcaption>`
+        : "";
+    return `<figure class="iso-figure"><div class="iso-plate"><div class="iso-plate-corners" aria-hidden="true">${corner("fig", fig)}${title ? corner("title", title) : ""}${hint ? corner("hint", hint) : ""}${corner("readout", readout, " data-readout")}</div>${body}</div>${legend}</figure>`;
+}
+const ISO_CSS = `
+.iso{
+  --anatomy-page:#0b0b0b;--anatomy-card:#131313;--anatomy-text:#a3a3a3;--anatomy-strong:#e6e6e6;--anatomy-muted:#6e6e6e;
+  --anatomy-paper:#131313;--anatomy-face:#1b1b1b;--anatomy-top:#1c1c1c;
+  --anatomy-shade-0:#0f0f0f;--anatomy-shade-1:#121212;--anatomy-shade-2:#151515;--anatomy-shade-3:#181818;
+  --anatomy-lit-top:#262626;--anatomy-lit-shade:#1d1d1d;
+  --anatomy-hi:#d4d4d4;--anatomy-mid:#6a6a6a;--anatomy-lo:#3e3e3e;--anatomy-faint:#2a2a2a;--anatomy-lit:#ffffff;
+  --anatomy-halo:#050505;--anatomy-halo-opacity:.9;--anatomy-dot:#e6e6e6;
+  --anatomy-red:#ff6b6b;--anatomy-green:#6be0a0;--anatomy-blue:#6b9bff;
+  --anatomy-weight:.6px;--anatomy-ease:cubic-bezier(.32,.72,0,1);
+  --anatomy-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --anatomy-lift:inset 0 1px 0 0 #ffffff0a,inset 0 0 0 1px #ffffff06,0 0 0 1px #00000026,0 1px 1px -.5px #00000014,0 3px 3px -1.5px #00000014,0 6px 6px -3px #00000014,0 12px 12px -6px #00000014;
+}
+.iso[data-theme="light"]{
+  --anatomy-page:#f2f2ef;--anatomy-card:#fbfbfa;--anatomy-text:#57575a;--anatomy-strong:#18181a;--anatomy-muted:#8c8c90;
+  --anatomy-paper:#fbfbfa;--anatomy-face:#ffffff;--anatomy-top:#ffffff;
+  --anatomy-shade-0:#dcdcd9;--anatomy-shade-1:#e5e5e2;--anatomy-shade-2:#ededea;--anatomy-shade-3:#f4f4f1;
+  --anatomy-lit-top:#ffffff;--anatomy-lit-shade:#eeeeeb;
+  --anatomy-hi:#26262a;--anatomy-mid:#8a8a8f;--anatomy-lo:#b4b4b8;--anatomy-faint:#d4d4d6;--anatomy-lit:#000000;
+  --anatomy-halo:#8a8a80;--anatomy-halo-opacity:.32;--anatomy-dot:#3a3a3e;
+  --anatomy-red:#e5484d;--anatomy-green:#30a46c;--anatomy-blue:#3e63dd;
+  --anatomy-lift:inset 0 1px 0 0 #ffffff,0 0 0 1px #0000000f,0 1px 1px -.5px #0000000a,0 3px 3px -1.5px #0000000a,0 6px 6px -3px #0000000a,0 12px 12px -6px #0000000a;
+}
+.iso-svg{display:block;width:100%;height:auto;overflow:visible}
+.iso-svg path,.iso-svg circle{vector-effect:non-scaling-stroke}
+.iso-fill{fill:var(--anatomy-paper);stroke:none}
+.iso-solid[data-lit]>.iso-fill{fill:var(--anatomy-face)}
+.iso-shade,.iso-top{stroke:none}
+.iso-shade[data-shade="0"]{fill:var(--anatomy-shade-0)}
+.iso-shade[data-shade="1"]{fill:var(--anatomy-shade-1)}
+.iso-shade[data-shade="2"]{fill:var(--anatomy-shade-2)}
+.iso-shade[data-shade="3"]{fill:var(--anatomy-shade-3)}
+.iso-top{fill:var(--anatomy-top)}
+.iso-solid[data-lit]>.iso-top{fill:var(--anatomy-lit-top)}
+.iso-solid[data-lit]>.iso-shade{fill:var(--anatomy-lit-shade)}
+.iso-solid[data-seamless]>.iso-shade,.iso-solid[data-seamless]>.iso-top{stroke-width:.4;stroke-linejoin:round}
+.iso-solid[data-seamless]>.iso-shade[data-shade="0"]{stroke:var(--anatomy-shade-0)}
+.iso-solid[data-seamless]>.iso-shade[data-shade="1"]{stroke:var(--anatomy-shade-1)}
+.iso-solid[data-seamless]>.iso-shade[data-shade="2"]{stroke:var(--anatomy-shade-2)}
+.iso-solid[data-seamless]>.iso-shade[data-shade="3"]{stroke:var(--anatomy-shade-3)}
+.iso-solid[data-seamless]>.iso-top{stroke:var(--anatomy-top)}
+.iso-solid[data-seamless][data-lit]>.iso-top{stroke:var(--anatomy-lit-top)}
+.iso-solid[data-seamless][data-lit]>.iso-shade{stroke:var(--anatomy-lit-shade)}
+.iso-solid[data-lit]>.iso-edge{stroke:var(--anatomy-lit)}
+.iso-halo{fill:var(--anatomy-halo);stroke:none;filter:blur(9px);opacity:var(--anatomy-halo-opacity);transform:translateY(3px)}
+.iso-line{fill:none;stroke:var(--anatomy-lo);stroke-width:var(--anatomy-weight);stroke-linecap:round;stroke-linejoin:round}
+.iso-line[data-tone="hi"]{stroke:var(--anatomy-hi)}
+.iso-line[data-tone="mid"]{stroke:var(--anatomy-mid)}
+.iso-line[data-tone="lo"]{stroke:var(--anatomy-lo)}
+.iso-line[data-tone="faint"]{stroke:var(--anatomy-faint)}
+.iso-line[data-tone="lit"]{stroke:var(--anatomy-lit)}
+.iso-line[data-tone="red"]{stroke:var(--anatomy-red)}
+.iso-line[data-tone="green"]{stroke:var(--anatomy-green)}
+.iso-line[data-tone="blue"]{stroke:var(--anatomy-blue)}
+.iso-line[data-dotted]{stroke-dasharray:.01 3.5;stroke-width:1}
+.iso-line[data-dashed]{stroke-dasharray:3 3}
+.iso-line[data-flow]{stroke-dasharray:2 6}
+.iso-wire-end{fill:var(--anatomy-paper);stroke:var(--anatomy-lo);stroke-width:var(--anatomy-weight)}
+.iso-wire[data-tone="hi"] .iso-wire-end{stroke:var(--anatomy-hi)}
+.iso-wire[data-tone="mid"] .iso-wire-end{stroke:var(--anatomy-mid)}
+.iso-wire[data-tone="faint"] .iso-wire-end{stroke:var(--anatomy-faint)}
+.iso-wire[data-tone="lit"] .iso-wire-end{stroke:var(--anatomy-lit)}
+.iso-dots circle{fill:var(--anatomy-dot);stroke:none;opacity:.32}
+.iso-dots[data-tone="hi"] circle{opacity:.85}
+.iso-dots[data-tone="mid"] circle{opacity:.45}
+.iso-dots[data-tone="lo"] circle{opacity:.22}
+.iso-dots[data-tone="faint"] circle{opacity:.12}
+.iso-figure{margin:32px 0 36px}
+.iso-plate{position:relative;padding:52px 24px;border-radius:0;background:var(--anatomy-card);box-shadow:0 0 0 1px var(--anatomy-mid);--anatomy-paper:var(--anatomy-card)}
+.iso-plate-corners{position:absolute;inset:18px 20px;pointer-events:none}
+.iso-plate-corner{position:absolute;color:var(--anatomy-muted);font-family:var(--anatomy-mono);font-size:10.5px;line-height:1;letter-spacing:.04em;white-space:nowrap}
+.iso-plate-corner[data-corner="fig"]{top:0;left:0;color:var(--anatomy-text)}
+.iso-plate-corner[data-corner="title"]{top:0;right:0;text-transform:uppercase;letter-spacing:.1em}
+.iso-plate-corner[data-corner="hint"]{bottom:0;left:0;text-transform:uppercase;letter-spacing:.1em}
+.iso-plate-corner[data-corner="readout"]{right:0;bottom:0;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
+.iso-plate .iso-svg{margin:0 auto}
+.iso-legend{display:grid;gap:8px;margin-top:12px;color:var(--anatomy-muted);font-size:13px;line-height:1.55}
+.iso-keys{display:flex;flex-wrap:wrap;gap:6px 18px}
+.iso-key{display:inline-flex;align-items:center;gap:7px}
+.iso-swatch{width:16px;height:10px;flex:none;overflow:visible}
+.iso-swatch path{fill:none;stroke:var(--anatomy-hi);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+.iso-swatch[data-mark="raised"] path,.iso-swatch[data-mark="flat"] path{stroke:var(--anatomy-mid)}
+.iso-swatch[data-mark="lit"] path{stroke:var(--anatomy-lit)}
+.iso-swatch[data-mark="dim"] path{stroke:var(--anatomy-lo)}
+.iso-swatch[data-mark="dotted"] path{stroke:var(--anatomy-dotted)}
+.iso-swatch-crease{stroke:var(--anatomy-lo)!important}
+@media (max-width:560px){.iso-plate{padding:48px 12px 70px}.iso-plate-corner[data-corner="hint"]{bottom:18px}}
+`;
+
+return { AZIMUTH, ELEVATION, SHADES, cameraOf, iso, towardViewer, depthOf, pathOf, joinPaths, roundedPlan, extrude, ringOf, slabOf, circleRing, cylinder, insetPlan, onTop, planOutline, lineOnTop, segment, rise, ring, pointsAt, dotGrid, corners, boxCorners, knurl, sideArc, topTicks, haloOf, fitProjection, solidSvg, lineSvg, dotsSvg, wireSvg, figureSvg, plateHtml, ISO_CSS };
+})();
+
+const G = (() => {
+const { cameraOf, iso, pathOf } = k;
+
+const TAU = Math.PI * 2;
+const LIGHT_UP = 1.2;
+const BANDS = [0, 0.2, 0.42, 0.62];
+
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const len3 = (a) => Math.hypot(a[0], a[1], a[2]);
+const unit3 = (a) => {
+  const length = len3(a) || 1;
+  return [a[0] / length, a[1] / length, a[2] / length];
+};
+
+function viewOf(P) {
+  const { sinA, cosA, sinE, cosE } = cameraOf(P);
+  return [cosA * cosE, sinA * cosE, sinE];
+}
+
+function lightOf(P) {
+  const { sinA, cosA } = cameraOf(P);
+  return unit3([-sinA, cosA, LIGHT_UP]);
+}
+
+const scaleOf = (P) => cameraOf(P).k;
+
+function bandOf(score) {
+  let tone = 0;
+  while (tone < BANDS.length && score >= BANDS[tone]) tone++;
+  return tone;
+}
+
+const frameOf = (o, a, u, v) => ({ o, a, u, v });
+
+function pointOf(F, s, r, angle) {
+  const c = Math.cos(angle);
+  const n = Math.sin(angle);
+  return [
+    F.o[0] + F.a[0] * s + r * (c * F.u[0] + n * F.v[0]),
+    F.o[1] + F.a[1] * s + r * (c * F.u[1] + n * F.v[1]),
+    F.o[2] + F.a[2] * s + r * (c * F.u[2] + n * F.v[2]),
+  ];
+}
+
+const radialOf = (F, angle) => {
+  const c = Math.cos(angle);
+  const n = Math.sin(angle);
+  return [c * F.u[0] + n * F.v[0], c * F.u[1] + n * F.v[1], c * F.u[2] + n * F.v[2]];
+};
+
+function hullTagged(points) {
+  const sorted = [...points].sort((a, b) => a.p[0] - b.p[0] || a.p[1] - b.p[1]);
+  if (sorted.length < 3) return sorted;
+  const cross = (o, a, b) => (a.p[0] - o.p[0]) * (b.p[1] - o.p[1]) - (a.p[1] - o.p[1]) * (b.p[0] - o.p[0]);
+  const lower = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 1e-9) lower.pop();
+    lower.push(point);
+  }
+  const upper = [];
+  for (let index = sorted.length - 1; index >= 0; index--) {
+    const point = sorted[index];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 1e-9) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+const hullOf = (points) => hullTagged(points.map((p) => ({ p }))).map(({ p }) => p);
+
+function groupsOf(keys) {
+  const count = keys.length;
+  const out = [];
+  const start = keys.findIndex((key, index) => key !== keys[(index + count - 1) % count]);
+  if (start < 0) {
+    if (keys[0] !== null) out.push({ key: keys[0], run: Array.from({ length: count + 1 }, (_, index) => index % count) });
+    return out;
+  }
+  let current = null;
+  for (let step = 0; step < count; step++) {
+    const index = (start + step) % count;
+    const key = keys[index];
+    if (current && current.key === key) {
+      current.run.push((index + 1) % count);
+      continue;
+    }
+    if (current && current.key !== null) out.push(current);
+    current = { key, run: [index, (index + 1) % count] };
+  }
+  if (current && current.key !== null) out.push(current);
+  return out;
+}
+
+const stepsFor = (radius, least = 16, most = 112, scale = 0) => Math.max(least, Math.min(most, scale ? Math.ceil((TAU * radius * scale) / 3) : Math.round((radius * 1.3) / 4) * 4));
+
+const signedArea = (points) => points.reduce((sum, [x, y], index) => {
+  const [nx, ny] = points[(index + 1) % points.length];
+  return sum + x * ny - nx * y;
+}, 0);
+
+const oriented = (points) => (signedArea(points) < 0 ? [...points].reverse() : points);
+
+function lathe(meridian, F, P, { steps = stepsFor(Math.max(...meridian.map(([, r]) => r)), 32, 160, scaleOf(P)), hole = null } = {}) {
+  const V = viewOf(P);
+  const L = lightOf(P);
+  const aV = dot3(F.a, V), uV = dot3(F.u, V), vV = dot3(F.v, V);
+  const aL = dot3(F.a, L), uL = dot3(F.u, L), vL = dot3(F.v, L);
+  const n = steps;
+  const m = meridian.length;
+  const rings = meridian.map(([s, r]) => Array.from({ length: n }, (_, j) => iso(pointOf(F, s, r, (j / n) * TAU), P)));
+  const midC = [], midS = [];
+  for (let j = 0; j < n; j++) {
+    const t = ((j + 0.5) / n) * TAU;
+    midC.push(Math.cos(t));
+    midS.push(Math.sin(t));
+  }
+  const seen = [], tones = [];
+  for (let i = 0; i < m - 1; i++) {
+    const ds = meridian[i + 1][0] - meridian[i][0];
+    const dr = meridian[i + 1][1] - meridian[i][1];
+    const length = Math.hypot(ds, dr);
+    const row = [], toneRow = [];
+    for (let j = 0; j < n; j++) {
+      if (length < 1e-9) { row.push(false); toneRow.push(0); continue; }
+      const facing = ds * (midC[j] * uV + midS[j] * vV) - dr * aV;
+      const lit = (ds * (midC[j] * uL + midS[j] * vL) - dr * aL) / length;
+      row.push(facing > 1e-6 * length);
+      toneRow.push(bandOf(lit));
+    }
+    seen.push(row);
+    tones.push(toneRow);
+  }
+  const buckets = [[], [], [], [], []];
+  for (let i = 0; i < m - 1; i++) {
+    const keys = seen[i].map((visible, j) => (visible ? tones[i][j] : null));
+    for (const { key, run } of groupsOf(keys)) {
+      const a = run.map((j) => rings[i][j]);
+      const b = run.map((j) => rings[i + 1][j]).reverse();
+      buckets[key].push(pathOf(oriented([...a, ...b]), true));
+    }
+  }
+  const phi = Math.atan2(vV, uV);
+  const flatV = Math.hypot(uV, vV);
+  const rangeOf = (i) => {
+    const ds = meridian[i + 1][0] - meridian[i][0];
+    const dr = meridian[i + 1][1] - meridian[i][1];
+    if (Math.hypot(ds, dr) < 1e-9) return null;
+    if (Math.abs(ds) < 1e-9 || flatV < 1e-9) return -dr * aV > 1e-9 ? [-1, 1] : null;
+    const c = (dr * aV) / (ds * flatV);
+    return ds > 0 ? [Math.max(-1, c), 1] : [-1, Math.min(1, c)];
+  };
+  const arcsOf = (ranges) => {
+    if (ranges.some((range) => !range)) return [];
+    const lo = Math.max(...ranges.map(([x]) => x));
+    const hi = Math.min(...ranges.map(([, x]) => x));
+    if (lo >= hi - 1e-9) return [];
+    const near = Math.acos(Math.min(1, hi));
+    const far = Math.acos(Math.max(-1, lo));
+    if (hi >= 1 && lo <= -1) return [[phi, phi + TAU]];
+    if (hi >= 1) return [[phi - far, phi + far]];
+    if (lo <= -1) return [[phi + near, phi + TAU - near]];
+    return [[phi + near, phi + far], [phi - far, phi - near]];
+  };
+  const along = (s, r, [from, to]) => {
+    const count = Math.max(2, Math.ceil(((to - from) * Math.max(r, 1e-6) * scaleOf(P)) / 1.5));
+    return Array.from({ length: count + 1 }, (_, j) => iso(pointOf(F, s, r, from + ((to - from) * j) / count), P));
+  };
+  const creases = [];
+  for (let i = 1; i < m - 1; i++) {
+    if (meridian[i][1] <= 1e-9) continue;
+    for (const arc of arcsOf([rangeOf(i - 1), rangeOf(i)])) creases.push(pathOf(along(meridian[i][0], meridian[i][1], arc)));
+  }
+  const most = Math.max(...meridian.map(([, r]) => r));
+  const around = Math.min(320, Math.max(n, Math.ceil((TAU * most * scaleOf(P)) / 1.5)));
+  const tagged = [];
+  meridian.forEach(([s, r], index) => {
+    for (let j = 0; j < around; j++) tagged.push({ p: iso(pointOf(F, s, r, (j / around) * TAU), P), ring: index });
+  });
+  const hull = hullTagged(tagged);
+  const holePath = hole ? pathOf(Array.from({ length: around }, (_, j) => iso(pointOf(F, hole[0], hole[1], (j / around) * TAU), P)), true) : "";
+  const fillPath = pathOf(hull.map(({ p }) => p), true) + holePath;
+  return {
+    fill: fillPath,
+    outline: fillPath,
+    crease: creases.join(""),
+    top: buckets[4].join(""),
+    shades: buckets.slice(0, 4).map((list) => list.join("")),
+  };
+}
+
+function prismOf(F, polygon, s0, s1, P) {
+  const V = viewOf(P);
+  const L = lightOf(P);
+  const ring = oriented(polygon.map(([x, y]) => [x, y]));
+  const n = ring.length;
+  const at = (s, [x, y]) => [F.o[0] + F.a[0] * s + F.u[0] * x + F.v[0] * y, F.o[1] + F.a[1] * s + F.u[1] * x + F.v[1] * y, F.o[2] + F.a[2] * s + F.u[2] * x + F.v[2] * y];
+  const low = ring.map((point) => iso(at(s0, point), P));
+  const high = ring.map((point) => iso(at(s1, point), P));
+  const buckets = [[], [], [], [], []];
+  const seen = [];
+  for (let j = 0; j < n; j++) {
+    const [x0, y0] = ring[j];
+    const [x1, y1] = ring[(j + 1) % n];
+    const normal = unit3(add3(mul3(F.u, y1 - y0), mul3(F.v, -(x1 - x0))));
+    const visible = dot3(normal, V) > 1e-6;
+    seen.push(visible);
+    if (visible) buckets[bandOf(dot3(normal, L))].push(pathOf([low[j], low[(j + 1) % n], high[(j + 1) % n], high[j]], true));
+  }
+  const ends = [[s0, low, mul3(F.a, -1)], [s1, high, F.a]];
+  const capSeen = ends.map(([, , normal]) => dot3(normal, V) > 1e-6);
+  ends.forEach(([, points, normal], index) => capSeen[index] && buckets[bandOf(dot3(normal, L))].push(pathOf(points, true)));
+  const hull = hullOf([...low, ...high]);
+  const creases = [];
+  for (let j = 0; j < n; j++) {
+    const prev = (j - 1 + n) % n;
+    const a = [ring[j][0] - ring[prev][0], ring[j][1] - ring[prev][1]];
+    const b = [ring[(j + 1) % n][0] - ring[j][0], ring[(j + 1) % n][1] - ring[j][1]];
+    const sharp = (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(a[0], a[1]) * Math.hypot(b[0], b[1]) || 1) < Math.cos(0.35);
+    if (sharp && seen[j] && seen[prev]) creases.push(pathOf([low[j], high[j]]));
+    ends.forEach(([, points], index) => capSeen[index] && seen[j] && creases.push(pathOf([points[j], points[(j + 1) % n]])));
+  }
+  return { fill: pathOf(hull, true), outline: pathOf(hull, true), crease: creases.join(""), top: buckets[4].join(""), shades: buckets.slice(0, 4).map((list) => list.join("")) };
+}
+
+const disc = (s0, s1, r, F, P, options = {}) =>
+  lathe([[s0, 0], [s0, r], [s1, r], [s1, 0]], F, P, { steps: stepsFor(r, 32, 160, scaleOf(P)), ...options });
+
+const ringBand = (s0, s1, rIn, rOut, F, P, options = {}) =>
+  lathe([[s0, rIn], [s0, rOut], [s1, rOut], [s1, rIn]], F, P, { steps: stepsFor(rOut, 32, 160, scaleOf(P)), hole: null, ...options });
+
+function ribsOf(F, s0, s1, r, count, P, { phase = 0, twist = 0, least = 0.12, r1 = r } = {}) {
+  const V = viewOf(P);
+  const lines = [];
+  const slope = (r1 - r) / (s1 - s0 || 1);
+  for (let index = 0; index < count; index++) {
+    const t = phase + (index / count) * TAU;
+    const radial = radialOf(F, t + twist / 2);
+    const normal = unit3([radial[0] - slope * F.a[0], radial[1] - slope * F.a[1], radial[2] - slope * F.a[2]]);
+    if (dot3(normal, V) < least) continue;
+    lines.push(pathOf([iso(pointOf(F, s0, r, t), P), iso(pointOf(F, s1, r1, t + twist), P)]));
+  }
+  return lines.join("");
+}
+
+return { frameOf, prismOf, disc, ringBand, ribsOf };
+})();
+
+
+/* ── 2. PAGE ─────────────────────────────────────────────────────────────── */
+document.getElementById("anatomy-css").textContent = k.ISO_CSS;
+{
+  const button = document.querySelector(".anatomy-theme");
+  button.addEventListener("click", () => {
+    const next = document.body.dataset.theme === "light" ? "dark" : "light";
+    document.body.dataset.theme = next;
+    button.setAttribute("aria-pressed", String(next === "light"));
+    document.dispatchEvent(new CustomEvent("anatomy-theme", { detail: next }));
+  });
+}
+
+/* ── 3. SCENE, MOUNT and LIVE ──────────────────────────────────────────────── */
+
+const WIDTH = 680;
+const HEIGHT = 450;
+
+const BASE = { x: -185, y: -150, w: 370, d: 330, r: 10 };
+const BASE_H = 10;
+const FOOT_H = 5;
+
+const R_TANK = 90;
+const R_IN = 88.5;
+const TANK_Z0 = 14;
+const TANK_TOP = 64;
+const WATER = 60;
+
+const RING = { in: 96, out: 114, z0: 36, z1: 46 };
+const DRUM = { in: 96, out: 106 };
+const BELT_Z = 41;
+
+const PROBE_Z = 56;
+const PROBE_R = 9.4;
+
+const MOTOR = { x: 129, y: -21, w: 42, d: 42, r: 3 };
+const MOTOR_H = 34;
+const PULLEY = [150, 0];
+const PULLEY_R = 6.8;
+
+const BOARD = { x: 80, y: -146, w: 92, d: 52, r: 3 };
+const BNC_BOARD = [159, -104, 11];
+
+const SCOPE = { x: -150, y: 124, w: 130, d: 48, r: 2 };
+const SCOPE_Z = 1.2;
+const SCOPE_X0 = -145.6;
+const SCOPE_W = 112;
+const SCOPE_BASE = 166;
+
+const US_MAX = 250;
+const C_MM_US = 1.48;
+const STEPS = 200;
+const STEP_DEG = 360 / STEPS;
+const SWEEP_S = 1.6;
+const HOLD_S = 0.45;
+const TOUR_JUMP = 5;
+
+/* Unico oggetto esattamente al centro dell'anello (0, 0) */
+const TARGETS = [
+  { name: "il campione centrale", x: 0, y: 0, r: 14, amp: 20, top: 92 },
+];
+const WALL = { name: "la parete opposta", amp: 22 };
+
+const P = k.fitProjection(
+  [...k.boxCorners(BASE, -BASE_H - FOOT_H, 0), [0, 0, 112], [PULLEY[0] + 24, 0, 52]],
+  WIDTH,
+  HEIGHT,
+  { pad: 26, azimuth: 42 },
+);
+
+const at = (point) => k.iso(point, P);
+const S = (paths, style) => k.solidSvg(paths, style);
+const L = (d, style) => k.lineSvg(d, style);
+const D = (points, style) => k.dotsSvg(points, style);
+const byDepth = (points) => [...points].sort((a, b) => k.depthOf([a[0], a[1], 0], P) - k.depthOf([b[0], b[1], 0], P));
+const AXIS_Z = G.frameOf([0, 0, 0], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
+const RAD = Math.PI / 180;
+const arcPoints = (cx, cy, r, from, to, n) => Array.from({ length: n + 1 }, (_, i) => {
+  const a = (from + ((to - from) * i) / n) * RAD;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+});
+const fmt = (value, digits = 1) => value.toFixed(digits).replace(".", ",");
+
+/* ── parti fisse ── */
+function baseLayer() {
+  const out = [`<path class="iso-halo" d="${k.haloOf(BASE, -BASE_H - FOOT_H, BASE_H, P)}"/>`];
+  for (const [x, y] of byDepth(k.corners(BASE, 26))) {
+    out.push(S(k.cylinder(x, y, 7, -BASE_H - FOOT_H, 1.6, P, 28), { tone: "lo" }));
+    out.push(S(k.cylinder(x, y, 5.4, -BASE_H - FOOT_H + 1.6, FOOT_H - 1.6, P, 28), { tone: "mid" }));
+  }
+  out.push(S(k.slabOf(BASE, -BASE_H, BASE_H, P, 8, 1.6), { tone: "mid" }));
+  out.push(L(k.planOutline(k.insetPlan(BASE, 6), 0, P), { tone: "lo" }));
+  const screws = k.corners(BASE, 12);
+  out.push(L(screws.map(([x, y]) => k.ring(x, y, 2.2, 0, P, 16)).join(""), { tone: "lo" }));
+  out.push(D(screws.map(([x, y]) => at([x, y, 0])), { size: 0.5 }));
+  return out.join("");
+}
+
+function boardLayer() {
+  const out = [];
+  out.push(S(k.slabOf(BOARD, 0, 4, P, 6, 0.6), { tone: "mid" }));
+  out.push(D(k.corners(BOARD, 4).map(([x, y]) => at([x, y, 4])), { size: 0.5, tone: "lo" }));
+  const pico = { x: 86, y: -140, w: 51, d: 21, r: 2 };
+  out.push(S(k.slabOf(pico, 4, 2.5, P, 4, 0.4), { tone: "hi" }));
+  out.push(S(k.slabOf({ x: 83, y: -133, w: 6, d: 9, r: 1 }, 6.5, 3, P, 3), { tone: "mid" }));
+  out.push(S(k.slabOf({ x: 107, y: -136, w: 10, d: 10, r: 1 }, 6.5, 1.5, P, 3), { tone: "mid" }));
+  out.push(D([at([92, -136, 6.5]), at([92, -124, 6.5]), at([133, -136, 6.5]), at([133, -124, 6.5])], { size: 0.4 }));
+  const core = { x: 143, y: -141, w: 20, d: 20, r: 2 };
+  out.push(S(k.slabOf(core, 4, 14, P, 4, 0.6), { tone: "hi" }));
+  out.push(L(k.planOutline(k.insetPlan(core, 3), 18, P, 4), { tone: "faint" }));
+  [90, 105].forEach((x) => {
+    out.push(S(k.slabOf({ x, y: -113, w: 10, d: 4, r: 0.6 }, 4, 18, P, 2), { tone: "mid" }));
+    out.push(D([at([x + 5, -111, 22])], { size: 0.5, tone: "lo" }));
+  });
+  out.push(S(k.cylinder(125, -104, 6, 4, 18, P, 28), { tone: "mid" }));
+  out.push(L(k.ring(125, -104, 3.4, 22, P, 20), { tone: "faint" }));
+  out.push(S(k.cylinder(BNC_BOARD[0], BNC_BOARD[1], 4.2, 4, 7, P, 24), { tone: "mid" }));
+  out.push(L(k.knurl(BNC_BOARD[0], BNC_BOARD[1], 4.2, 4, 11, 20, P), { tone: "lo" }));
+  out.push(D([at(BNC_BOARD)], { size: 0.5, tone: "hi" }));
+  return out.join("");
+}
+
+const xOf = (us) => SCOPE_X0 + (us * SCOPE_W) / US_MAX;
+function scopeLayer() {
+  const out = [S(k.slabOf(SCOPE, 0, SCOPE_Z, P, 4, 0.3), { tone: "lo" })];
+  out.push(L(k.planOutline(k.insetPlan(SCOPE, 5), SCOPE_Z, P, 4), { tone: "faint" }));
+  out.push(L(k.lineOnTop([SCOPE_X0, SCOPE_BASE], [SCOPE_X0 + SCOPE_W, SCOPE_BASE], SCOPE_Z, P), { tone: "faint" }));
+  const ticks = k.topTicks(SCOPE_X0, SCOPE_X0 + SCOPE_W, 11.2, 4, SCOPE_BASE + 0.5, SCOPE_Z, [1.4, 3], P);
+  out.push(L(ticks.minor, { tone: "lo" }), L(ticks.major, { tone: "mid" }));
+  return out.join("");
+}
+
+function drumRing() {
+  const out = [];
+  out.push(S(G.ringBand(0, RING.z0, DRUM.in, DRUM.out, AXIS_Z, P, { hole: [RING.z0, DRUM.in] }), { tone: "lo" }));
+  out.push(S(G.ringBand(RING.z0, RING.z1, RING.in, RING.out, AXIS_Z, P, { hole: [RING.z1, RING.in] }), { tone: "mid" }));
+  out.push(L(G.ribsOf(AXIS_Z, RING.z0 + 1.2, RING.z1 - 1.2, RING.out, 160, P), { tone: "lo" }));
+  out.push(L(k.ring(0, 0, RING.out - 3.2, RING.z1, P, 96), { tone: "faint" }));
+  return out.join("");
+}
+
+function tankLayer() {
+  const out = [];
+  out.push(S(k.cylinder(0, 0, 58, 0, TANK_Z0, P, 56), { tone: "lo" }));
+  out.push(S(k.cylinder(0, 0, R_TANK, TANK_Z0, TANK_TOP - TANK_Z0, P, 72), { tone: "mid" }));
+  out.push(L(k.sideArc(0, 0, R_TANK, 24, P, 40), { tone: "faint" }));
+  out.push(L(k.ring(0, 0, R_IN, TANK_TOP, P, 96), { tone: "lo" }));
+  out.push(S(k.cylinder(0, 0, 87, WATER - 0.4, 0.4, P, 72), { tone: "faint", crease: "none", flat: true }));
+  out.push(L([32, 54, 76].map((r) => k.ring(0, 0, r, WATER, P, 72)).join(""), { tone: "faint", dotted: true }));
+  for (const t of TARGETS) {
+    out.push(S(k.cylinder(t.x, t.y, t.r, WATER - 1, t.top - WATER + 1, P, 36), { tone: "hi", crease: "none" }));
+    /* Accenno agli strati interni sulla sommità del campione */
+    out.push(L(k.ring(t.x, t.y, t.r - 2.4, t.top, P, 28), { tone: "lo" }));
+    out.push(L(k.ring(t.x - 3.5, t.y - 2, 3.2, t.top, P, 20), { tone: "faint", dashed: true }));
+    out.push(L(k.ring(t.x + 3.2, t.y + 2.2, 2.8, t.top, P, 20), { tone: "mid" }));
+  }
+  return out.join("");
+}
+
+function motorLayer() {
+  const out = [];
+  out.push(S(k.slabOf(MOTOR, 0, MOTOR_H, P, 6, 0.8), { tone: "mid" }));
+  out.push(L(k.planOutline(k.insetPlan(MOTOR, 3), MOTOR_H, P, 6), { tone: "faint" }));
+  out.push(D(k.corners(MOTOR, 5).map(([x, y]) => at([x, y, MOTOR_H])), { size: 0.5, tone: "lo" }));
+  out.push(S(k.cylinder(PULLEY[0], PULLEY[1], 2.6, MOTOR_H, 14, P, 16), { tone: "mid", crease: "none" }));
+  out.push(S(k.cylinder(PULLEY[0], PULLEY[1], PULLEY_R, 36, 10, P, 24), { tone: "hi" }));
+  out.push(L(k.knurl(PULLEY[0], PULLEY[1], PULLEY_R, 36, 46, 18, P), { tone: "lo" }));
+  const alpha = Math.acos((RING.out + 0.4 - PULLEY_R) / PULLEY[0]);
+  const a = alpha / RAD;
+  const near = [[(RING.out + 0.4) * Math.cos(alpha), (RING.out + 0.4) * Math.sin(alpha)], [PULLEY[0] + PULLEY_R * Math.cos(alpha), PULLEY_R * Math.sin(alpha)]];
+  const far = near.map(([x, y]) => [x, -y]);
+  out.push(L(k.onTop(near, BELT_Z, P), { tone: "hi" }));
+  out.push(L(k.onTop(far, BELT_Z, P), { tone: "hi" }));
+  out.push(L(k.onTop(arcPoints(PULLEY[0], 0, PULLEY_R + 0.2, -a, a, 14), BELT_Z, P), { tone: "hi" }));
+  out.push(L(k.onTop(arcPoints(0, 0, RING.out + 0.4, a, 132, 30), BELT_Z, P), { tone: "hi" }));
+  return out.join("");
+}
+
+/* ── la parte che si muove: tutto ciò che sta sull'anello ── */
+function arm(deg) {
+  const th = deg * RAD, c = Math.cos(th), s = Math.sin(th);
+  const U = [c, s, 0], V = [-s, c, 0];
+  const pt = (r, t, z) => [c * r - s * t, s * r + c * t, z];
+  const out = [];
+  const FZ = G.frameOf([0, 0, RING.z1], [0, 0, 1], U, V);
+  out.push(S(G.prismOf(FZ, [[94, -16], [124, -16], [124, 16], [94, 16]], 0, PROBE_Z - RING.z1, P), { tone: "mid" }));
+  out.push(D([[100, -10], [100, 10], [118, -10], [118, 10]].map(([r, t]) => at(pt(r, t, PROBE_Z))), { size: 0.45, tone: "lo" }));
+  const cheeks = [-1, 1]
+    .map((sign) => ({ sign, depth: k.depthOf(pt(108, sign * 13, 61), P) }))
+    .sort((a, b) => a.depth - b.depth);
+  const cheek = (sign) => S(G.prismOf(FZ, [[100, sign * 11.6], [116, sign * 11.6], [116, sign * 14.4], [100, sign * 14.4]], PROBE_Z - RING.z1, PROBE_Z - RING.z1 + 10, P), { tone: "mid" });
+  out.push(cheek(cheeks[0].sign));
+  const F = G.frameOf([(R_TANK + 0.4) * c, (R_TANK + 0.4) * s, PROBE_Z], U, [0, 0, 1], V);
+  out.push(S(G.disc(-0.8, 0.5, 12.2, F, P), { tone: "lo", crease: "none" }));
+  out.push(S(G.disc(0.5, 7, 11, F, P), { tone: "mid" }));
+  out.push(L(G.ribsOf(F, 1.3, 6.2, 11, 30, P), { tone: "lo" }));
+  out.push(S(G.disc(7, 44, PROBE_R, F, P), { tone: "hi", lit: true }));
+  const bnc = pt(R_TANK + 0.4 + 36, 0, PROBE_Z + PROBE_R);
+  out.push(S(k.cylinder(bnc[0], bnc[1], 3.2, bnc[2], 7, P, 20), { tone: "mid", lit: true }));
+  out.push(D([at([bnc[0], bnc[1], bnc[2] + 7])], { size: 0.5, tone: "hi" }));
+  out.push(cheek(cheeks[1].sign));
+  return { svg: out.join(""), top: [bnc[0], bnc[1], bnc[2] + 7], front: k.depthOf(pt(R_TANK + 20, 0, PROBE_Z), P) >= 0 };
+}
+
+function cable(top) {
+  const from = BNC_BOARD, points = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    points.push(at([from[0] + (top[0] - from[0]) * t, from[1] + (top[1] - from[1]) * t, from[2] + (top[2] - from[2]) * t + 42 * Math.sin(Math.PI * t)]));
+  }
+  return k.wireSvg(points[0], points[points.length - 1], { via: points.slice(1, -1), tone: "mid", size: 1.1 });
+}
+
+/* ── modello dell'eco: parete anteriore, strati interni del campione e parete di fondo ── */
+const castCache = new Map();
+function castOf(step) {
+  const key = ((step % STEPS) + STEPS) % STEPS;
+  if (castCache.has(key)) return castCache.get(key);
+  const th = key * STEP_DEG * RAD, c = Math.cos(th), s = Math.sin(th);
+  const o = [R_IN * c, R_IN * s], d = [-c, -s];
+  const hits = [];
+  for (const t of TARGETS) {
+    const ox = o[0] - t.x, oy = o[1] - t.y;
+    const b = ox * d[0] + oy * d[1], cc = ox * ox + oy * oy - t.r * t.r, disc = b * b - cc;
+    if (disc >= 0 && -b - Math.sqrt(disc) > 0) {
+      const tFront = -b - Math.sqrt(disc);
+      const tBack = -b + Math.sqrt(disc);
+      hits.push({ t: tFront, name: t.name, amp: t.amp });
+      const internalShift = 1.8 * Math.cos(th - 0.6);
+      const internalAmp = 9 + 5 * Math.max(0, Math.sin(th + 0.4));
+      hits.push({ t: (tFront + tBack) / 2 + internalShift, name: "nucleo interno", amp: internalAmp });
+      hits.push({ t: tBack, name: "parete post. campione", amp: t.amp * 0.55 });
+    }
+  }
+  hits.push({ t: 2 * R_IN, name: WALL.name, amp: WALL.amp });
+  hits.sort((a, b) => a.t - b.t);
+  const pts = [[xOf(0), SCOPE_BASE], [xOf(0.4), SCOPE_BASE - 26], [xOf(2.4), SCOPE_BASE - 6], [xOf(4), SCOPE_BASE - 12], [xOf(6.5), SCOPE_BASE - 1]];
+  for (const h of hits) {
+    const us = (2 * h.t) / C_MM_US;
+    if (us > US_MAX - 4) continue;
+    pts.push([xOf(us - 1.4), SCOPE_BASE], [xOf(us), SCOPE_BASE - h.amp], [xOf(us + 1), SCOPE_BASE - h.amp * 0.35], [xOf(us + 2.2), SCOPE_BASE - h.amp * 0.55], [xOf(us + 3.6), SCOPE_BASE]);
+  }
+  pts.push([xOf(US_MAX), SCOPE_BASE]);
+  const result = { o, d, hits, first: hits[0], us: (2 * hits[0].t) / C_MM_US, trace: pts };
+  castCache.set(key, result);
+  return result;
+}
+
+function beamSvg(cast, cur) {
+  const { o, d, first } = cast;
+  const travel = C_MM_US * cur, pos = travel <= first.t ? travel : travel <= 2 * first.t ? 2 * first.t - travel : -1;
+  const hit = [o[0] + d[0] * first.t, o[1] + d[1] * first.t];
+  const out = [L(k.lineOnTop(o, hit, PROBE_Z, P), { tone: "faint", dashed: true })];
+  if (pos >= 0) {
+    const perp = [-d[1], d[0]];
+    const packet = [0, 2.6, 5.2].map((back) => {
+      const centre = [o[0] + d[0] * (pos - (travel <= first.t ? back : -back)), o[1] + d[1] * (pos - (travel <= first.t ? back : -back))];
+      return k.lineOnTop([centre[0] - perp[0] * 7, centre[1] - perp[1] * 7], [centre[0] + perp[0] * 7, centre[1] + perp[1] * 7], PROBE_Z, P);
+    });
+    out.push(L(packet.join(""), { tone: "lit" }));
+  }
+  if (travel > first.t) {
+    const radius = Math.min(10, (travel - first.t) * 0.3);
+    if (radius > 0.4) out.push(L(k.ring(hit[0], hit[1], radius, PROBE_Z, P, 28), { tone: "lit" }));
+  }
+  out.push(D([at([hit[0], hit[1], PROBE_Z])], { size: 0.7, tone: "lit" }));
+  return out.join("");
+}
+
+function traceSvg(cast, cur) {
+  const limit = xOf(cur), points = [];
+  for (let i = 0; i < cast.trace.length; i++) {
+    const p = cast.trace[i];
+    if (p[0] <= limit) { points.push(p); continue; }
+    if (i > 0) { const q = cast.trace[i - 1], f = (limit - q[0]) / (p[0] - q[0]); points.push([limit, q[1] + (p[1] - q[1]) * f]); }
+    break;
+  }
+  const line = points.length > 1 ? L(k.onTop(points, SCOPE_Z + 0.1, P), { tone: "lit" }) : "";
+  const cursor = L(k.lineOnTop([limit, SCOPE_BASE + 2], [limit, SCOPE_BASE - 34], SCOPE_Z + 0.1, P), { tone: "mid" });
+  return line + cursor;
+}
+
+/* ── Generatore del fac-simile Ecografico B-Mode (sezione interna dell'oggetto) ── */
+function buildBmodeSvg() {
+  const cx = 190, cy = 140;
+  const speckles = [];
+  for (let i = 0; i < 260; i++) {
+    const a = (i * 137.508) * RAD;
+    const r = Math.sqrt((i + 0.5) / 260) * 66;
+    const x = cx + r * Math.cos(a);
+    const y = cy + r * Math.sin(a);
+    const distCyst = Math.hypot((x - (cx - 21)) / 20, (y - (cy - 12)) / 15);
+    if (distCyst < 0.92) continue;
+    const distCore = Math.hypot(x - (cx + 18), y - (cy + 14));
+    const inCore = distCore < 17;
+    const op = inCore ? 0.55 + (i % 4) * 0.11 : 0.12 + (i % 5) * 0.06;
+    const sz = inCore ? 1.3 + (i % 3) * 0.45 : 0.8 + (i % 3) * 0.35;
+    speckles.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sz.toFixed(1)}" fill="#d8efe6" fill-opacity="${op.toFixed(2)}"/>`);
+  }
+
+  const rays = Array.from({ length: 36 }, (_, i) => {
+    const a = (i * 10) * RAD;
+    return `<line x1="${(cx + 18 * Math.cos(a)).toFixed(1)}" y1="${(cy + 18 * Math.sin(a)).toFixed(1)}" x2="${(cx + 122 * Math.cos(a)).toFixed(1)}" y2="${(cy + 122 * Math.sin(a)).toFixed(1)}" stroke="#6be0a0" stroke-opacity="0.06" stroke-width="0.6"/>`;
+  }).join("");
+
+  const grayBar = Array.from({ length: 8 }, (_, i) => {
+    const v = Math.round(25 + (i / 7) * 220);
+    return `<rect x="14" y="${38 + i * 16}" width="7" height="14" fill="rgb(${v},${v},${v})" stroke="#2a353b" stroke-width="0.5"/>`;
+  }).join("");
+
+  return `
+  <svg class="bmode-svg" viewBox="0 0 380 280" role="img" aria-label="Immagine ecografica B-mode che mostra la sezione trasversale dell'oggetto e i suoi strati interni">
+    <defs>
+      <radialGradient id="eco-water" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#0d171a"/>
+        <stop offset="75%" stop-color="#070c0e"/>
+        <stop offset="100%" stop-color="#040608"/>
+      </radialGradient>
+      <radialGradient id="eco-stroma" cx="46%" cy="44%" r="52%">
+        <stop offset="0%" stop-color="#3a4c48"/>
+        <stop offset="70%" stop-color="#253230"/>
+        <stop offset="92%" stop-color="#4f6762"/>
+        <stop offset="100%" stop-color="#d8efe6"/>
+      </radialGradient>
+      <radialGradient id="eco-core" cx="45%" cy="45%" r="50%">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="55%" stop-color="#b5dcd0"/>
+        <stop offset="100%" stop-color="#4e6962"/>
+      </radialGradient>
+      <filter id="eco-glow" x="-15%" y="-15%" width="130%" height="130%">
+        <feGaussianBlur stdDeviation="1.4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <rect width="380" height="280" fill="#050709"/>
+    <circle cx="${cx}" cy="${cy}" r="122" fill="url(#eco-water)" stroke="#26343a" stroke-width="0.8" stroke-dasharray="2 3"/>
+    ${rays}
+
+    <circle cx="${cx}" cy="${cy}" r="96" fill="none" stroke="#1c2a2e" stroke-width="0.6" stroke-dasharray="3 3"/>
+    <circle cx="${cx}" cy="${cy}" r="42" fill="none" stroke="#1c2a2e" stroke-width="0.6" stroke-dasharray="2 4"/>
+    <line x1="${cx - 126}" y1="${cy}" x2="${cx + 126}" y2="${cy}" stroke="#1c2a2e" stroke-width="0.5"/>
+    <line x1="${cx}" y1="${cy - 126}" x2="${cx}" y2="${cy + 126}" stroke="#1c2a2e" stroke-width="0.5"/>
+
+    <!-- STRATO 1: Involucro / Capsula esterna iperecogena + Parenchima -->
+    <circle cx="${cx}" cy="${cy}" r="70" fill="url(#eco-stroma)" stroke="#e6f7f0" stroke-width="2.2" filter="url(#eco-glow)"/>
+    <circle cx="${cx}" cy="${cy}" r="66" fill="none" stroke="#8ab3a6" stroke-width="0.8" stroke-dasharray="5 2"/>
+
+    <!-- STRATO 2: Setti / Anelli di stratificazione interna -->
+    <circle cx="${cx}" cy="${cy}" r="48" fill="none" stroke="#6d8f85" stroke-width="0.9" stroke-dasharray="6 4" opacity="0.7"/>
+    <ellipse cx="${cx + 4}" cy="${cy + 3}" rx="34" ry="29" fill="#1c2726" fill-opacity="0.45" stroke="#7da398" stroke-width="0.8" stroke-dasharray="3 3"/>
+
+    <!-- STRATO 3: Cavità cistica anecogena -->
+    <path d="M ${cx - 42} ${cy - 4} Q ${cx - 21} ${cy + 16} ${cx - 2} ${cy - 4}" fill="none" stroke="#9ec7b9" stroke-width="2.5" opacity="0.35"/>
+    <ellipse cx="${cx - 21}" cy="${cy - 12}" rx="20" ry="15" fill="#05080a" stroke="#9ec7b9" stroke-width="1.2"/>
+
+    <!-- STRATO 4: Nucleo denso iperecogeno -->
+    <circle cx="${cx + 18}" cy="${cy + 14}" r="16" fill="url(#eco-core)" stroke="#ffffff" stroke-width="1.5" filter="url(#eco-glow)"/>
+    <circle cx="${cx + 15}" cy="${cy + 11}" r="5.5" fill="#ffffff"/>
+
+    <g>${speckles.join("")}</g>
+
+    ${grayBar}
+    <text x="14" y="28" fill="#6e848a" font-family="monospace" font-size="8">TGC</text>
+    <text x="312" y="26" fill="#6be0a0" font-family="monospace" font-size="8.5" text-anchor="end">5.0 MHz · B-MODE</text>
+    <text x="366" y="26" fill="#8fa6ac" font-family="monospace" font-size="8.5" text-anchor="end">200 LINEE</text>
+
+    <g font-family="monospace" font-size="8.5" fill="#d8efe6">
+      <polyline points="${cx + 49},${cy - 49} ${cx + 78},${cy - 76} 358,${cy - 76}" fill="none" stroke="#6be0a0" stroke-width="0.8"/>
+      <circle cx="${cx + 49}" cy="${cy - 49}" r="1.8" fill="#6be0a0"/>
+      <text x="358" y="${cy - 80}" text-anchor="end" fill="#6be0a0">1. INVOLUCRO ESTERNO</text>
+      <text x="358" y="${cy - 67}" text-anchor="end" fill="#8fa6ac" font-size="7.5">interfaccia acqua/parete</text>
+
+      <polyline points="${cx - 26},${cy - 15} ${cx - 78},${cy - 56} 32,${cy - 56}" fill="none" stroke="#6b9bff" stroke-width="0.8"/>
+      <circle cx="${cx - 26}" cy="${cy - 15}" r="1.8" fill="#6b9bff"/>
+      <text x="32" y="${cy - 60}" fill="#6b9bff">2. CAVITÀ ANECOGENA</text>
+      <text x="32" y="${cy - 47}" fill="#8fa6ac" font-size="7.5">fluido interno (assenza echi)</text>
+
+      <polyline points="${cx - 12},${cy + 36} ${cx - 72},${cy + 78} 32,${cy + 78}" fill="none" stroke="#b5dcd0" stroke-width="0.8"/>
+      <circle cx="${cx - 12}" cy="${cy + 36}" r="1.8" fill="#b5dcd0"/>
+      <text x="32" y="${cy + 74}" fill="#d8efe6">3. MATRICE INTERNA</text>
+      <text x="32" y="${cy + 87}" fill="#8fa6ac" font-size="7.5">tessuto medio-ecogeno (speckle)</text>
+
+      <polyline points="${cx + 24},${cy + 20} ${cx + 82},${cy + 68} 358,${cy + 68}" fill="none" stroke="#ffffff" stroke-width="0.8"/>
+      <circle cx="${cx + 24}" cy="${cy + 20}" r="1.8" fill="#ffffff"/>
+      <text x="358" y="${cy + 64}" text-anchor="end" fill="#ffffff">4. NUCLEO DENSO</text>
+      <text x="358" y="${cy + 77}" text-anchor="end" fill="#8fa6ac" font-size="7.5">inclusione iperecogena</text>
+    </g>
+
+    <g stroke="#5b7075" stroke-width="0.8">
+      <line x1="140" y1="264" x2="240" y2="264"/>
+      <line x1="140" y1="260" x2="140" y2="267"/>
+      <line x1="190" y1="261" x2="190" y2="266"/>
+      <line x1="240" y1="260" x2="240" y2="267"/>
+    </g>
+    <text x="190" y="257" fill="#8fa6ac" font-family="monospace" font-size="8" text-anchor="middle">Ø 28 mm (scala 1:5)</text>
+  </svg>`;
+}
+
+/* ── montaggio ── */
+const nearY = k.iso([0, 0, BELT_Z], P)[1];
+const svg = k.figureSvg({
+  width: WIDTH,
+  height: HEIGHT,
+  label:
+    "Un banco per l'ecografia a ultrasuoni con un singolo campione cilindrico al centro della vasca. Al termine del giro di 360 gradi viene mostrata in primo piano la sezione ecografica B-mode con gli strati interni dell'oggetto.",
+  body: [
+    `<defs><clipPath id="clip-far"><rect x="0" y="0" width="${WIDTH}" height="${nearY.toFixed(1)}"/></clipPath><clipPath id="clip-near"><rect x="0" y="${nearY.toFixed(1)}" width="${WIDTH}" height="${HEIGHT}"/></clipPath></defs>`,
+    baseLayer(),
+    boardLayer(),
+    scopeLayer(),
+    `<g data-part="trace"></g>`,
+    `<g clip-path="url(#clip-far)" style="fill-rule:evenodd">${drumRing()}</g>`,
+    `<g data-part="armBack"></g>`,
+    tankLayer(),
+    `<g data-part="beam"></g>`,
+    `<g clip-path="url(#clip-near)" style="fill-rule:evenodd">${drumRing()}</g>`,
+    motorLayer(),
+    `<g data-part="armFront"></g>`,
+    `<g data-part="cable"></g>`,
+  ],
+});
+
+document.getElementById("app").innerHTML = k.plateHtml({
+  fig: "Fig 1",
+  title: "Tomografia Pulse-Echo a 360°",
+  hint: "Scorri la barra dal basso verso l'alto (fino a 360°) per rivelare l'ecografia",
+  readout: "avvio…",
+  keys: [
+    { mark: "lit", label: "Sonda 5 MHz, pacchetto d'onda ed echi A-mode" },
+    { mark: "raised", label: "Campione cilindrico multistrato al centro (0, 0)" },
+  ],
+  caption:
+    "Il campione è posto esattamente al centro dell'anello rotante. Mentre la sonda compie l'intero giro di 360° (200 passi da 1,8°), raccoglie gli echi della capsula esterna e delle disomogeneità interne. Al termine del giro completo compare in primo piano la ricostruzione tomografica B-mode che rivela gli strati e il contenuto dell'oggetto.",
+  body: `
+    <div class="iso-stage-wrap">
+      <div class="iso-scrubber" tabindex="0" role="slider" aria-label="Controllo rotazione anello: scorri dal basso verso l'alto fino a 360 gradi per vedere la sezione ecografica" aria-valuemin="0" aria-valuemax="${STEPS}" aria-valuenow="0">
+        <span class="iso-scrubber-label">360°<br>ECO</span>
+        <div class="iso-scrubber-track">
+          <div class="iso-scrubber-fill"></div>
+          <div class="iso-scrubber-thumb"></div>
+        </div>
+        <span class="iso-scrubber-label">0°</span>
+      </div>
+      <div class="iso-stage">
+        ${svg}
+        <button class="bmode-trigger" type="button" data-open-bmode>Mostra B-mode</button>
+      </div>
+      <div class="bmode-overlay" data-open="false" role="dialog" aria-modal="false" aria-label="Sezione ecografica B-mode dell'oggetto centrale">
+        <div class="bmode-card">
+          <div class="bmode-header">
+            <span class="bmode-badge"><span class="bmode-dot"></span>Ricostruzione B-Mode · Giro 360° completato</span>
+            <button class="bmode-close" type="button" data-close-bmode>Nuova scansione ✕</button>
+          </div>
+          <div class="bmode-screen">
+            ${buildBmodeSvg()}
+          </div>
+          <div class="bmode-footer">
+            <span>Sezione trasversale (Z = 56 mm)</span>
+            <span>c = 1480 m/s · 4 strati rilevati</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+});
+
+/* ── live: angolo, barra laterale (basso -> alto) e comparsa dell'ecografia a fine giro ── */
+const stage = document.querySelector(".iso-stage");
+const scrubber = document.querySelector(".iso-scrubber");
+const trackEl = scrubber.querySelector(".iso-scrubber-track");
+const fillEl = scrubber.querySelector(".iso-scrubber-fill");
+const thumbEl = scrubber.querySelector(".iso-scrubber-thumb");
+const overlayEl = document.querySelector(".bmode-overlay");
+const closeBtn = document.querySelector("[data-close-bmode]");
+const openBtn = document.querySelector("[data-open-bmode]");
+const svgEl = stage.querySelector("svg");
+const part = (name) => svgEl.querySelector(`[data-part="${name}"]`);
+const armBack = part("armBack"), armFront = part("armFront"), cableEl = part("cable"), beamEl = part("beam"), traceEl = part("trace");
+const readout = document.querySelector("[data-readout]");
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+
+let angle = 0, targetStep = 0, sweepT = -1, holdT = 0;
+let frame = 0, last = 0, touring = !still.matches, visible = false, idleTimer = 0;
+let shownAngle = NaN, shownKey = "";
+let bmodeShown = false;
+
+const settled = () => Math.abs(targetStep * STEP_DEG - angle) < 0.08;
+const wrapDeg = (value) => ((value % 360) + 360) % 360;
+
+function setBmodeOpen(open) {
+  bmodeShown = open;
+  overlayEl.setAttribute("data-open", String(open));
+}
+
+function draw() {
+  const progress = Math.min(1, Math.max(0, angle / 360));
+  const deg = wrapDeg(angle);
+  const idle = settled();
+  const step = Math.min(STEPS - 1, Math.round(deg / STEP_DEG) % STEPS);
+
+  if (angle !== shownAngle) {
+    const built = arm(deg);
+    armBack.innerHTML = built.front ? "" : built.svg;
+    armFront.innerHTML = built.front ? built.svg : "";
+    cableEl.innerHTML = cable(built.top);
+    shownAngle = angle;
+
+    /* Dal basso (100% top) verso l'alto (0% top) */
+    const pct = progress * 100;
+    thumbEl.style.top = `${(100 - pct).toFixed(2)}%`;
+    fillEl.style.height = `${pct.toFixed(2)}%`;
+  }
+
+  const cur = sweepT < 0 ? -1 : (sweepT / SWEEP_S) * US_MAX;
+  const key = idle && cur >= 0 ? `${step}:${Math.round(cur * 2)}` : "off";
+  if (key !== shownKey) {
+    shownKey = key;
+    if (key === "off") { beamEl.innerHTML = ""; traceEl.innerHTML = ""; }
+    else { const cast = castOf(step); beamEl.innerHTML = beamSvg(cast, cur); traceEl.innerHTML = traceSvg(cast, cur); }
+  }
+
+  let text;
+  if (bmodeShown) {
+    text = `scansione 360° completata · vista B-mode attiva`;
+  } else if (!idle || cur < 0) {
+    text = `anello in rotazione · θ ${fmt(Math.min(360, angle))}°`;
+  } else {
+    const cast = castOf(step);
+    text = `linea ${Math.min(STEPS, Math.round(angle / STEP_DEG) + 1)}/${STEPS} · θ ${fmt(Math.min(360, angle))}° · ` +
+      (cur >= cast.us ? `eco da ${cast.first.name}: ${fmt(cast.us, 0)} µs · ${fmt(cast.first.t / 10)} cm` : `in ascolto… ${fmt(cur, 0)} µs`);
+  }
+  if (readout.textContent !== text) readout.textContent = text;
+  scrubber.setAttribute("aria-valuenow", String(Math.round(progress * STEPS)));
+  scrubber.setAttribute("aria-valuetext", text);
+}
+
+function tick(now) {
+  const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
+  last = now;
+  const calm = still.matches, goal = targetStep * STEP_DEG;
+  angle = calm ? goal : angle + (goal - angle) * (1 - Math.exp(-dt / 0.12));
+  if (Math.abs(goal - angle) < 0.08) angle = goal;
+
+  if (!settled()) {
+    sweepT = -1;
+    holdT = 0;
+  } else {
+    if (sweepT < 0) sweepT = calm ? SWEEP_S : 0;
+    else if (sweepT < SWEEP_S) sweepT = Math.min(SWEEP_S, sweepT + dt);
+    else {
+      if (targetStep >= STEPS && !bmodeShown) {
+        setBmodeOpen(true);
+        touring = false;
+      } else if (touring && !bmodeShown) {
+        holdT += dt;
+        if (holdT >= HOLD_S) {
+          targetStep = Math.min(STEPS, targetStep + TOUR_JUMP);
+          sweepT = -1;
+          holdT = 0;
+        }
+      }
+    }
+  }
+  draw();
+  const quiet = !touring && settled() && sweepT >= SWEEP_S;
+  frame = visible && !quiet ? requestAnimationFrame(tick) : 0;
+}
+
+const run = () => { if (!frame && visible) { last = 0; frame = requestAnimationFrame(tick); } };
+
+const steer = (nextStep) => {
+  const clamped = Math.max(0, Math.min(STEPS, nextStep));
+  touring = false;
+  if (clamped < STEPS - 2 && bmodeShown) {
+    setBmodeOpen(false);
+  }
+  if (clamped >= STEPS) {
+    setBmodeOpen(true);
+  }
+  if (clamped !== targetStep) {
+    targetStep = clamped;
+    sweepT = -1;
+    holdT = 0;
+  }
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!bmodeShown && targetStep < STEPS) {
+      touring = !still.matches;
+      holdT = 0;
+      run();
+    }
+  }, 5000);
+  run();
+};
+
+new IntersectionObserver((entries) => {
+  visible = entries[entries.length - 1].isIntersecting;
+  if (visible) run();
+}, { rootMargin: "120px 0px" }).observe(stage);
+
+/* Gestione trascinamento e clic sulla barra laterale sinistra (dal basso = 0 verso l'alto = STEPS) */
+let dragging = false;
+const updateFromBar = (clientY) => {
+  const box = trackEl.getBoundingClientRect();
+  if (!box.height) return;
+  const share = Math.min(1, Math.max(0, (box.bottom - clientY) / box.height));
+  const step = Math.round(share * STEPS);
+  steer(step);
+};
+
+scrubber.addEventListener("pointerdown", (event) => {
+  dragging = true;
+  scrubber.setPointerCapture(event.pointerId);
+  scrubber.focus();
+  updateFromBar(event.clientY);
+});
+scrubber.addEventListener("pointermove", (event) => {
+  if (!dragging) return;
+  updateFromBar(event.clientY);
+});
+const stopDrag = (event) => {
+  if (!dragging) return;
+  dragging = false;
+  if (scrubber.hasPointerCapture(event.pointerId)) {
+    scrubber.releasePointerCapture(event.pointerId);
+  }
+};
+scrubber.addEventListener("pointerup", stopDrag);
+scrubber.addEventListener("pointercancel", stopDrag);
+
+/* Supporto rotellina del mouse sulla barra laterale (scroll in su = avanza verso l'alto) */
+scrubber.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  const dir = Math.sign(event.deltaY);
+  if (dir !== 0) steer(targetStep - dir * 4);
+}, { passive: false });
+
+/* Supporto tastiera (Freccia Su = avanza verso l'alto, Freccia Giù = scende verso 0°) */
+scrubber.addEventListener("keydown", (event) => {
+  const jump = event.shiftKey ? 10 : 2;
+  let next = null;
+  if (event.key === "ArrowUp" || event.key === "ArrowRight") next = targetStep + jump;
+  if (event.key === "ArrowDown" || event.key === "ArrowLeft") next = targetStep - jump;
+  if (event.key === "Home") next = 0;
+  if (event.key === "End") next = STEPS;
+  if (next === null) return;
+  event.preventDefault();
+  steer(next);
+});
+
+/* Pulsanti apertura/chiusura della foto B-mode */
+closeBtn.addEventListener("click", () => {
+  setBmodeOpen(false);
+  targetStep = 0;
+  angle = 0;
+  sweepT = -1;
+  holdT = 0;
+  touring = !still.matches;
+  draw();
+  run();
+});
+
+openBtn.addEventListener("click", () => {
+  targetStep = STEPS;
+  angle = 360;
+  setBmodeOpen(true);
+  touring = false;
+  draw();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && bmodeShown) {
+    setBmodeOpen(false);
+    draw();
+  }
+});
+
+draw();
+</script>
+</body>
+</html>
